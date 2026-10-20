@@ -179,7 +179,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _openAddTransaction,
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.primaryFor(context),
         foregroundColor: Colors.white,
         shape: const CircleBorder(),
         child: const Icon(Icons.add),

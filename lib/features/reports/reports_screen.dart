@@ -110,10 +110,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final savings = income - expenses;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.backgroundFor(context),
       appBar: AppBar(
   title: const Text('Reports'),
-  backgroundColor: AppColors.background,
+  backgroundColor: AppColors.backgroundFor(context),
   elevation: 0,
   actions: [
     IconButton(
@@ -181,9 +181,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surfaceFor(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.borderFor(context)),
       ),
       child: Row(
         children: [
@@ -219,9 +219,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surfaceFor(context),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.borderFor(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -231,7 +231,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           Text(
             title,
             style: TextStyle(
-              color: AppColors.textSecondary,
+              color: AppColors.textSecondaryFor(context),
               fontSize: 14,
             ),
           ),
@@ -254,7 +254,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.primary,
+        color: AppColors.primaryFor(context),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
@@ -347,7 +347,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           child: LinearProgressIndicator(
             value: fraction,
             minHeight: 10,
-            backgroundColor: AppColors.border,
+            backgroundColor: AppColors.borderFor(context),
             valueColor: AlwaysStoppedAnimation<Color>(color),
           ),
         ),
@@ -374,9 +374,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: AppColors.surfaceFor(context),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: AppColors.borderFor(context)),
             ),
             child: const Text(
               'No expenses recorded for this month.',
@@ -413,7 +413,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     child: LinearProgressIndicator(
                       value: fraction,
                       minHeight: 8,
-                      backgroundColor: AppColors.border,
+                      backgroundColor: AppColors.borderFor(context),
                       valueColor: AlwaysStoppedAnimation<Color>(
                         AppColors.primary,
                       ),

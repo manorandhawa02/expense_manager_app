@@ -227,7 +227,7 @@ class _GroupBalancesScreenState extends State<GroupBalancesScreen> {
         widget.group['name']?.toString() ?? 'Group Balances';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.backgroundFor(context),
       appBar: AppBar(
         title: Text('$groupName Balances'),
       ),
@@ -265,9 +265,9 @@ class _GroupBalancesScreenState extends State<GroupBalancesScreen> {
                               : 'Settled';
 
                       final color = net.abs() < 0.005
-                          ? AppColors.textSecondary
+                          ? AppColors.textSecondaryFor(context)
                           : net > 0
-                              ? AppColors.primary
+                              ? AppColors.primaryFor(context)
                               : Colors.red;
 
                       return Card(

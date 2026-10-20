@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
@@ -12,6 +11,8 @@ class AppTheme {
   static ThemeData get darkTheme {
     return _buildTheme(Brightness.dark);
   }
+
+
 
   static ThemeData _buildTheme(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
@@ -70,7 +71,7 @@ iconTheme: IconThemeData(
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(
+          borderSide: BorderSide(
             color: AppColors.primary,
             width: 1.5,
           ),
@@ -89,3 +90,4 @@ iconTheme: IconThemeData(
     );
   }
 }
+ 

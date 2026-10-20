@@ -277,7 +277,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
     final groupName = widget.group['name']?.toString() ?? 'Group';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.backgroundFor(context),
       appBar: AppBar(
         title: Text(groupName),
       ),

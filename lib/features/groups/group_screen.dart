@@ -332,7 +332,7 @@ class GroupsScreenState extends State<GroupsScreen> {
                     tooltip: 'Create group',
                     onPressed: _showCreateGroupDialog,
                     style: IconButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: AppColors.primaryFor(context),
                       foregroundColor: Colors.white,
                     ),
                     icon: const Icon(Icons.add),
@@ -355,7 +355,7 @@ class GroupsScreenState extends State<GroupsScreen> {
                       Icon(
                         Icons.groups_outlined,
                         size: 64,
-                        color: AppColors.textSecondary,
+                        color: AppColors.textSecondaryFor(context),
                       ),
                       const SizedBox(height: 16),
                       Text(
@@ -437,7 +437,7 @@ Widget _buildGroupCard(Map<String, dynamic> group) {
               backgroundColor: AppColors.mint,
               child: Icon(
                 Icons.groups_outlined,
-                color: AppColors.primary,
+                color: AppColors.primaryFor(context),
                 size: 27,
               ),
             ),
@@ -478,11 +478,11 @@ Widget _buildGroupCard(Map<String, dynamic> group) {
                     ),
                   ],
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Tap to view shared expenses',
                     style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.primary,
+                      color: AppColors.primaryFor(context),
                       fontWeight: FontWeight.w600,
                     ),
                   ),

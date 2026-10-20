@@ -145,14 +145,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         : _incomeCategories;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.backgroundFor(context),
       appBar: AppBar(
         title: Text(
           _isEditing ? 'Edit Transaction' : 'Add Transaction',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: AppColors.background,
-        foregroundColor: AppColors.primary,
+        backgroundColor: AppColors.backgroundFor(context),
+        foregroundColor: AppColors.primaryFor(context),
         elevation: 0,
       ),
       body: SafeArea(

@@ -18,7 +18,7 @@ class OnboardingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.backgroundFor(context),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(28),
@@ -44,10 +44,10 @@ class OnboardingScreen extends StatelessWidget {
                   color: AppColors.mint.withValues(alpha: 0.45),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.account_balance_wallet_rounded,
                   size: 85,
-                  color: AppColors.primary,
+                  color: AppColors.primaryFor(context),
                 ),
               ),
               const SizedBox(height: 40),
@@ -73,13 +73,13 @@ class OnboardingScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'TRACK  •  SPLIT  •  SETTLE',
                 style: TextStyle(
                   fontSize: 12,
                   letterSpacing: 1.5,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
+                  color: AppColors.primaryFor(context),
                 ),
               ),
               const Spacer(),
