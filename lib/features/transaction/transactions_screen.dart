@@ -1,16 +1,12 @@
 
 import 'package:flutter/material.dart';
+
 import '../../core/theme/app_colors.dart';
 import 'transaction_storage.dart';
 
 class TransactionsScreen extends StatefulWidget {
-  final Future<void> Function(
-    Map<String, dynamic> transaction,
-  )? onEdit;
-
-  final Future<void> Function(
-    Map<String, dynamic> transaction,
-  )? onDelete;
+  final Future<void> Function(Map<String, dynamic> transaction)? onEdit;
+  final Future<void> Function(Map<String, dynamic> transaction)? onDelete;
 
   const TransactionsScreen({
     super.key,
@@ -38,8 +34,6 @@ class TransactionsScreenState extends State<TransactionsScreen> {
     }).toList();
   }
 
-
-  
   @override
   void initState() {
     super.initState();
@@ -77,16 +71,18 @@ class TransactionsScreenState extends State<TransactionsScreen> {
         .where((transaction) => transaction['type'] == type)
         .fold<double>(
           0,
-          (total, transaction) =>
-              total + (transaction['amount'] as num).toDouble(),
+          (total, transaction) {
+            final amount = transaction['amount'];
+            return total + (amount is num ? amount.toDouble() : 0);
+          },
         );
   }
 
   String _formatAmount(num amount) {
     return amount.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (match) => ',',
-    );
+          RegExp(r'\B(?=(\d{3})+(?!\d))'),
+          (match) => ',',
+        );
   }
 
   String _formatDate(String value) {
@@ -128,64 +124,70 @@ class TransactionsScreenState extends State<TransactionsScreen> {
   }
 
   Color _categoryColor(String type) {
-    return type == 'Income'
-        ? const Color(0xFFDDF5E8)
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (type == 'Income') {
+      return isDark
+          ? const Color(0xFF214B3B)
+          : const Color(0xFFDDF5E8);
+    }
+
+    return isDark
+        ? const Color(0xFF4A3826)
         : const Color(0xFFFFE6C7);
   }
 
-
-Future<void> _confirmDelete(
-  Map<String, dynamic> transaction,
-) async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) {
-      return AlertDialog(
-        title: const Text('Delete Transaction?'),
-        content: const Text(
-          'Are you sure you want to delete this transaction? '
-          'This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext, false);
-            },
-            child: const Text('Cancel'),
+  Future<void> _confirmDelete(
+    Map<String, dynamic> transaction,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Transaction?'),
+          content: const Text(
+            'Are you sure you want to delete this transaction? '
+            'This action cannot be undone.',
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext, true);
-            },
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: Colors.red),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
             ),
-          ),
-        ],
-      );
-    },
-  );
-
-  if (confirmed != true || !mounted) return;
-
-  final deleteCallback = widget.onDelete;
-
-  if (deleteCallback == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Delete functionality is not connected yet.'),
-      ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text(
+                'Delete',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          ],
+        );
+      },
     );
-    return;
+
+    if (confirmed != true || !mounted) return;
+
+    final deleteCallback = widget.onDelete;
+
+    if (deleteCallback == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Delete functionality is not connected yet.'),
+        ),
+      );
+      return;
+    }
+
+    await deleteCallback(transaction);
   }
 
-  await deleteCallback(transaction);
-}
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.backgroundFor(context),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: loadTransactions,
@@ -195,20 +197,20 @@ Future<void> _confirmDelete(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Transactions',
                   style: TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
+                Text(
                   'Track your income and expenses',
                   style: TextStyle(
                     fontSize: 14,
-                    color: AppColors.textSecondary,
+                    color: AppColors.textSecondaryFor(context),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -224,12 +226,21 @@ Future<void> _confirmDelete(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Total Transactions',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                        ),
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.account_balance_wallet_outlined,
+                            color: Colors.white70,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Total Transactions',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -268,12 +279,12 @@ Future<void> _confirmDelete(
 
                 const SizedBox(height: 26),
 
-                const Text(
+                Text(
                   'Recent Activity',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                    color: AppColors.textPrimaryFor(context),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -288,23 +299,21 @@ Future<void> _confirmDelete(
                         padding: const EdgeInsets.only(right: 8),
                         child: ChoiceChip(
                           label: Text(
-                            filter == 'Expense'
-                                ? 'Expenses'
-                                : filter,
+                            filter == 'Expense' ? 'Expenses' : filter,
                           ),
                           selected: selected,
                           showCheckmark: false,
                           selectedColor: AppColors.primary,
-                          backgroundColor: AppColors.surface,
+                          backgroundColor: AppColors.surfaceFor(context),
                           side: BorderSide(
                             color: selected
                                 ? AppColors.primary
-                                : AppColors.border,
+                                : AppColors.borderFor(context),
                           ),
                           labelStyle: TextStyle(
                             color: selected
                                 ? Colors.white
-                                : AppColors.textPrimary,
+                                : AppColors.textPrimaryFor(context),
                             fontWeight: FontWeight.w600,
                           ),
                           onSelected: (_) {
@@ -337,23 +346,23 @@ Future<void> _confirmDelete(
                           Icon(
                             Icons.receipt_long_outlined,
                             size: 48,
-                            color: AppColors.textSecondary,
+                            color: AppColors.textSecondaryFor(context),
                           ),
                           const SizedBox(height: 12),
-                          const Text(
+                          Text(
                             'No transactions yet',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
+                              color: AppColors.textPrimaryFor(context),
                             ),
                           ),
                           const SizedBox(height: 6),
-                          const Text(
+                          Text(
                             'Tap + to add your first transaction.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: AppColors.textSecondary,
+                              color: AppColors.textSecondaryFor(context),
                             ),
                           ),
                         ],
@@ -415,15 +424,18 @@ Future<void> _confirmDelete(
     final category = transaction['category'] as String? ?? 'Other';
     final title = transaction['title'] as String? ?? category;
     final date = transaction['date']?.toString() ?? '';
-    final amount = (transaction['amount'] as num).toDouble();
+    final rawAmount = transaction['amount'];
+    final amount = rawAmount is num ? rawAmount.toDouble() : 0.0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surfaceFor(context),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(
+          color: AppColors.borderFor(context),
+        ),
       ),
       child: Row(
         children: [
@@ -447,8 +459,8 @@ Future<void> _confirmDelete(
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
+                  style: TextStyle(
+                    color: AppColors.textPrimaryFor(context),
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
@@ -456,8 +468,8 @@ Future<void> _confirmDelete(
                 const SizedBox(height: 5),
                 Text(
                   '$category • ${_formatDate(date)}',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: AppColors.textSecondaryFor(context),
                     fontSize: 11,
                   ),
                 ),
@@ -479,57 +491,58 @@ Future<void> _confirmDelete(
             ),
           ),
           const SizedBox(width: 4),
+          PopupMenuButton<String>(
+            tooltip: 'Transaction options',
+            icon: Icon(
+              Icons.more_vert,
+              color: AppColors.textSecondaryFor(context),
+            ),
+            onSelected: (value) {
+              if (value == 'edit') {
+                final editCallback = widget.onEdit;
 
-PopupMenuButton<String>(
-  tooltip: 'Transaction options',
-  icon: const Icon(
-    Icons.more_vert,
-    color: AppColors.textSecondary,
-  ),
-  onSelected: (value) {
-    if (value == 'edit') {
-      final editCallback = widget.onEdit;
-
-      if (editCallback != null) {
-        editCallback(transaction);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Edit functionality is not connected yet.'),
+                if (editCallback != null) {
+                  editCallback(transaction);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Edit functionality is not connected yet.',
+                      ),
+                    ),
+                  );
+                }
+              } else if (value == 'delete') {
+                _confirmDelete(transaction);
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem<String>(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, size: 20),
+                    SizedBox(width: 10),
+                    Text('Edit'),
+                  ],
+                ),
+              ),
+              PopupMenuItem<String>(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.delete_outline,
+                      color: Colors.red,
+                      size: 20,
+                    ),
+                    SizedBox(width: 10),
+                    Text('Delete'),
+                  ],
+                ),
+              ),
+            ],
           ),
-        );
-      }
-    } else if (value == 'delete') {
-      _confirmDelete(transaction);
-    }
-  },
-  itemBuilder: (context) => const [
-    PopupMenuItem<String>(
-      value: 'edit',
-      child: Row(
-        children: [
-          Icon(Icons.edit_outlined, size: 20),
-          SizedBox(width: 10),
-          Text('Edit'),
-        ],
-      ),
-    ),
-    PopupMenuItem<String>(
-      value: 'delete',
-      child: Row(
-        children: [
-          Icon(
-            Icons.delete_outline,
-            color: Colors.red,
-            size: 20,
-          ),
-          SizedBox(width: 10),
-          Text('Delete'),
-        ],
-      ),
-    ),
-  ],
-),
         ],
       ),
     );

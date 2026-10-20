@@ -34,6 +34,15 @@ class AppTheme {
         brightness: brightness,
         surface: surface,
       ),
+      textTheme: ThemeData(
+  brightness: brightness,
+).textTheme.apply(
+  bodyColor: textPrimary,
+  displayColor: textPrimary,
+),
+iconTheme: IconThemeData(
+  color: textPrimary,
+),
       appBarTheme: AppBarTheme(
         backgroundColor: background,
         foregroundColor: textPrimary,

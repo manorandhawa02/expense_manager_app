@@ -165,9 +165,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               Container(
                 padding: const EdgeInsets.all(5),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: AppColors.surfaceFor(context),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.border),
+                  border: Border.all(color: AppColors.borderFor(context)),
                 ),
                 child: Row(
                   children: [_typeButton('Expense'), _typeButton('Income')],
@@ -176,11 +176,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               const SizedBox(height: 28),
 
               // Amount
-              const Text(
+              Text(
                 'Amount (PKR)',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: AppColors.textPrimaryFor(context),
                 ),
               ),
               const SizedBox(height: 10),
@@ -193,14 +193,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   hintText: '0.00',
                   prefixText: 'PKR ',
                   filled: true,
-                  fillColor: AppColors.surface,
+                  fillColor: AppColors.surfaceFor(context),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: AppColors.border),
+                    borderSide: BorderSide(color: AppColors.borderFor(context)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: AppColors.border),
+                    borderSide: BorderSide(color: AppColors.borderFor(context)),
                   ),
                 ),
                 validator: (value) {
@@ -252,7 +252,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     '${_selectedDate.day.toString().padLeft(2, '0')}/'
                     '${_selectedDate.month.toString().padLeft(2, '0')}/'
                     '${_selectedDate.year}',
-                    style: const TextStyle(color: AppColors.textPrimary),
+                    style: TextStyle(color: AppColors.textPrimaryFor(context)),
                   ),
                 ),
               ),
@@ -339,7 +339,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             type,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: selected ? Colors.white : AppColors.textSecondary,
+              color: selected ? Colors.white : AppColors.textSecondaryFor(context),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -353,9 +353,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       padding: const EdgeInsets.only(bottom: 10),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
+          color: AppColors.textPrimaryFor(context),
         ),
       ),
     );
@@ -366,15 +366,15 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       hintText: hintText,
       suffixIcon: suffixIcon,
       filled: true,
-      fillColor: AppColors.surface,
+      fillColor: AppColors.surfaceFor(context),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: AppColors.border),
+        borderSide: BorderSide(color: AppColors.borderFor(context)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: AppColors.border),
+        borderSide: BorderSide(color: AppColors.borderFor(context)),
       ),
     );
   }

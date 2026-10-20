@@ -1,6 +1,11 @@
+
 import 'package:flutter/material.dart';
-import '../transaction/transaction_storage.dart';
+
+import '../../app.dart';
+import '../../core/currency/currency_controller.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/theme_controller.dart';
+import '../transaction/transaction_storage.dart';
 
 class SettingsScreen extends StatelessWidget {
   final Future<void> Function()? onTransactionsCleared;
@@ -29,16 +34,15 @@ class SettingsScreen extends StatelessWidget {
               icon: Icons.palette_outlined,
               title: 'Appearance',
               subtitle: 'Customize your app theme',
-              onTap: () => _showComingSoon(context),
+              onTap: () => _showAppearanceDialog(context),
             ),
             _buildDivider(),
             _buildSettingsTile(
-  icon: Icons.delete_outline_rounded,
-  title: 'Clear Data',
-  subtitle: 'Remove saved personal transactions',
-  iconColor: Colors.redAccent,
-  onTap: () => _confirmClearData(context),
-),
+              icon: Icons.currency_exchange_rounded,
+              title: 'Currency',
+              subtitle: 'Choose your preferred currency',
+              onTap: () => _showCurrencyDialog(context),
+            ),
           ]),
           const SizedBox(height: 24),
           _buildSectionTitle('Data Management'),
@@ -54,9 +58,9 @@ class SettingsScreen extends StatelessWidget {
             _buildSettingsTile(
               icon: Icons.delete_outline_rounded,
               title: 'Clear Data',
-              subtitle: 'Remove saved transaction data',
+              subtitle: 'Remove saved personal transactions',
               iconColor: Colors.redAccent,
-              onTap: () => _showComingSoon(context),
+              onTap: () => _confirmClearData(context),
             ),
           ]),
           const SizedBox(height: 24),
@@ -127,7 +131,8 @@ class SettingsScreen extends StatelessWidget {
         width: 42,
         height: 42,
         decoration: BoxDecoration(
-          color: (iconColor ?? AppColors.primary).withValues(alpha: 0.12),
+          color: (iconColor ?? AppColors.primary)
+              .withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(
@@ -154,14 +159,6 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  void _showComingSoon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('This setting will be available in a future step.'),
-      ),
-    );
-  }
-
   void _showStorageInfo(BuildContext context) {
     showDialog<void>(
       context: context,
@@ -181,43 +178,144 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
   }
+
   Future<void> _confirmClearData(BuildContext context) async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text('Clear personal transactions?'),
-      content: const Text(
-        'This will permanently remove all personal income and '
-        'expense transactions stored on this device. Group '
-        'expenses and settlements will not be deleted.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(dialogContext, false),
-          child: const Text('Cancel'),
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Clear personal transactions?'),
+        content: const Text(
+          'This will permanently remove all personal income and '
+          'expense transactions stored on this device. Group '
+          'expenses and settlements will not be deleted.',
         ),
-        TextButton(
-          onPressed: () => Navigator.pop(dialogContext, true),
-          child: const Text(
-            'Clear Data',
-            style: TextStyle(color: Colors.redAccent),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
           ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              'Clear Data',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await TransactionStorage.clearTransactions();
+    await onTransactionsCleared?.call();
+
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Personal transactions cleared successfully.',
         ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 
-  if (confirmed != true) return;
+  Future<void> _showAppearanceDialog(BuildContext context) async {
+    final controller = ThemeProvider.of(context);
 
-  await TransactionStorage.clearTransactions();
-  await onTransactionsCleared?.call();
+    final selectedMode = await showDialog<ThemeMode>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Choose Appearance'),
+        children: [
+          RadioGroup<ThemeMode>(
+            groupValue: controller.themeMode,
+            onChanged: (value) {
+              if (value != null) {
+                Navigator.pop(dialogContext, value);
+              }
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _themeOption('System Default', ThemeMode.system),
+                _themeOption('Light', ThemeMode.light),
+                _themeOption('Dark', ThemeMode.dark),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
 
-  if (!context.mounted) return;
+    if (selectedMode != null) {
+      await controller.setThemeMode(selectedMode);
+    }
+  }
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text('Personal transactions cleared successfully.'),
-    ),
-  );
-}
+  Widget _themeOption(String title, ThemeMode mode) {
+    return RadioListTile<ThemeMode>(
+      title: Text(title),
+      value: mode,
+    );
+  }
+
+  Future<void> _showCurrencyDialog(BuildContext context) async {
+    final controller = CurrencyProvider.of(context);
+
+    final selectedCurrency = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Choose Currency'),
+        children: [
+          RadioGroup<String>(
+            groupValue: controller.currencyCode,
+            onChanged: (value) {
+              if (value != null) {
+                Navigator.pop(dialogContext, value);
+              }
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                RadioListTile<String>(
+                  title: Text('Pakistani Rupee (PKR)'),
+                  value: 'PKR',
+                ),
+                RadioListTile<String>(
+                  title: Text('US Dollar (USD)'),
+                  value: 'USD',
+                ),
+                RadioListTile<String>(
+                  title: Text('Euro (EUR)'),
+                  value: 'EUR',
+                ),
+                RadioListTile<String>(
+                  title: Text('British Pound (GBP)'),
+                  value: 'GBP',
+                ),
+                RadioListTile<String>(
+                  title: Text('Indian Rupee (INR)'),
+                  value: 'INR',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (selectedCurrency != null) {
+      await controller.setCurrency(selectedCurrency);
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Currency set to $selectedCurrency.'),
+        ),
+      );
+    }
+  }
 }

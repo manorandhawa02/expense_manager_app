@@ -198,7 +198,7 @@ class HomeScreenState extends State<HomeScreen> {
         categories.values.fold<double>(0, (sum, value) => sum + value);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.backgroundFor(context),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: loadTransactions,
@@ -219,7 +219,7 @@ class HomeScreenState extends State<HomeScreen> {
                           _greeting(),
                           style: TextStyle(
                             fontSize: 12,
-                            color: AppColors.textSecondary,
+                            color: AppColors.textSecondaryFor(context),
                             letterSpacing: 1.2,
                           ),
                         ),
@@ -316,12 +316,12 @@ class HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 24),
 
                 // QUICK ACTIONS
-                const Text(
+                Text(
                   'Quick Actions',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                    color: AppColors.textPrimaryFor(context),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -371,12 +371,12 @@ class HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 28),
 
                 // MONTHLY SUMMARY
-                const Text(
+                Text(
                   'This Month',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                    color: AppColors.textPrimaryFor(context),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -416,12 +416,12 @@ class HomeScreenState extends State<HomeScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       'Recent Transactions',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                        color: AppColors.textPrimaryFor(context),
                       ),
                     ),
                     TextButton(
@@ -460,7 +460,7 @@ class HomeScreenState extends State<HomeScreen> {
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
-                      color: AppColors.surface,
+                      color: AppColors.surfaceFor(context),
                       child: ListTile(
                         leading: CircleAvatar(
                           backgroundColor: AppColors.mint,
@@ -496,12 +496,12 @@ class HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 28),
 
                 // CATEGORY-WISE SPENDING
-                const Text(
+                Text(
                   'Spending by Category',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                    color: AppColors.textPrimaryFor(context),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -516,7 +516,7 @@ class HomeScreenState extends State<HomeScreen> {
                   )
                 else
                   Card(
-                    color: AppColors.surface,
+                    color: AppColors.surfaceFor(context),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
@@ -559,7 +559,7 @@ class HomeScreenState extends State<HomeScreen> {
                                   child: LinearProgressIndicator(
                                     value: fraction,
                                     minHeight: 8,
-                                    backgroundColor: AppColors.border,
+                                    backgroundColor: AppColors.borderFor(context),
                                     valueColor:
                                         AlwaysStoppedAnimation<Color>(
                                       AppColors.primary,
@@ -573,7 +573,7 @@ class HomeScreenState extends State<HomeScreen> {
                                     '${(fraction * 100).toStringAsFixed(1)}%',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: AppColors.textSecondary,
+                                      color: AppColors.textSecondaryFor(context),
                                     ),
                                   ),
                                 ),
@@ -608,12 +608,12 @@ class HomeScreenState extends State<HomeScreen> {
     required String detail,
   }) {
     return Card(
-      color: AppColors.surface,
+      color: AppColors.surfaceFor(context),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            Icon(icon, size: 36, color: AppColors.textSecondary),
+            Icon(icon, size: 36, color: AppColors.textSecondaryFor(context)),
             const SizedBox(height: 8),
             Text(
               message,
@@ -624,8 +624,8 @@ class HomeScreenState extends State<HomeScreen> {
             Text(
               detail,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
+              style: TextStyle(
+                color: AppColors.textSecondaryFor(context),
                 fontSize: 12,
               ),
             ),
@@ -644,7 +644,7 @@ class HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
+        color: AppColors.surfaceFor(context).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -680,7 +680,7 @@ class HomeScreenState extends State<HomeScreen> {
     required VoidCallback onTap,
   }) {
     return Material(
-      color: AppColors.surface,
+      color: AppColors.surfaceFor(context),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -692,7 +692,7 @@ class HomeScreenState extends State<HomeScreen> {
           ),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: AppColors.borderFor(context)),
           ),
           child: Column(
             children: [
@@ -701,8 +701,8 @@ class HomeScreenState extends State<HomeScreen> {
               Text(
                 label,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
+                style: TextStyle(
+                  color: AppColors.textPrimaryFor(context),
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -723,9 +723,9 @@ class HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surfaceFor(context),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.borderFor(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -738,8 +738,8 @@ class HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 12),
           Text(
             title,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              color: AppColors.textSecondaryFor(context),
               fontSize: 13,
             ),
           ),
@@ -749,8 +749,8 @@ class HomeScreenState extends State<HomeScreen> {
             alignment: Alignment.centerLeft,
             child: Text(
               amount,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
+              style: TextStyle(
+                color: AppColors.textPrimaryFor(context),
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),

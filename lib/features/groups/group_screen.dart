@@ -83,11 +83,11 @@ class GroupsScreenState extends State<GroupsScreen> {
                           },
                         ),
                         const SizedBox(height: 18),
-                        const Text(
+                        Text(
                           'Members',
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
+                            color: AppColors.textPrimaryFor(context),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -120,20 +120,20 @@ class GroupsScreenState extends State<GroupsScreen> {
                                   setDialogState,
                                 );
                               },
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.add_circle,
-                                color: AppColors.primary,
+                                color: AppColors.primaryFor(context),
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 10),
                         if (members.isEmpty)
-                          const Text(
+                          Text(
                             'Add at least one member to continue.',
                             style: TextStyle(
                               fontSize: 12,
-                              color: AppColors.textSecondary,
+                              color: AppColors.textSecondaryFor(context),
                             ),
                           )
                         else
@@ -295,7 +295,7 @@ class GroupsScreenState extends State<GroupsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.backgroundFor(context),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: loadGroups,
@@ -305,7 +305,7 @@ class GroupsScreenState extends State<GroupsScreen> {
             children: [
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -314,15 +314,15 @@ class GroupsScreenState extends State<GroupsScreen> {
                           style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
+                            color: AppColors.primaryFor(context),
                           ),
                         ),
-                        SizedBox(height: 6),
+                        const SizedBox(height: 6),
                         Text(
                           'Share expenses with friends and family',
                           style: TextStyle(
                             fontSize: 14,
-                            color: AppColors.textSecondary,
+                            color: AppColors.textSecondaryFor(context),
                           ),
                         ),
                       ],
@@ -358,20 +358,20 @@ class GroupsScreenState extends State<GroupsScreen> {
                         color: AppColors.textSecondary,
                       ),
                       const SizedBox(height: 16),
-                      const Text(
+                      Text(
                         'No groups yet',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
+                          color: AppColors.textPrimaryFor(context),
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
+                      Text(
                         'Create a group to start organizing shared expenses.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: AppColors.textSecondary,
+                          color: AppColors.textSecondaryFor(context),
                         ),
                       ),
                       const SizedBox(height: 18),
@@ -386,9 +386,9 @@ class GroupsScreenState extends State<GroupsScreen> {
               else ...[
                 Text(
                   '${_groups.length} ${_groups.length == 1 ? 'Group' : 'Groups'}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
+                    color: AppColors.textSecondaryFor(context),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -412,9 +412,9 @@ Widget _buildGroupCard(Map<String, dynamic> group) {
   return Container(
     margin: const EdgeInsets.only(bottom: 12),
     decoration: BoxDecoration(
-      color: AppColors.surface,
+      color: AppColors.surfaceFor(context),
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: AppColors.border),
+      border: Border.all(color: AppColors.borderFor(context)),
     ),
     child: InkWell(
       borderRadius: BorderRadius.circular(18),
@@ -450,19 +450,19 @@ Widget _buildGroupCard(Map<String, dynamic> group) {
                     name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                      color: AppColors.textPrimaryFor(context),
                     ),
                   ),
                   const SizedBox(height: 5),
                   Text(
                     '${members.length} '
                     '${members.length == 1 ? 'member' : 'members'}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: AppColors.textSecondary,
+                      color: AppColors.textSecondaryFor(context),
                     ),
                   ),
                   if (members.isNotEmpty) ...[
@@ -471,9 +471,9 @@ Widget _buildGroupCard(Map<String, dynamic> group) {
                       members.join(', '),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.textSecondary,
+                        color: AppColors.textSecondaryFor(context),
                       ),
                     ),
                   ],

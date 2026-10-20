@@ -28,10 +28,10 @@ class OnboardingScreen extends StatelessWidget {
                 alignment: Alignment.topRight,
                 child: TextButton(
                   onPressed: () => _openHome(context),
-                  child: const Text(
+                  child: Text(
                     'Skip',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: AppColors.textSecondaryFor(context),
                     ),
                   ),
                 ),
@@ -51,25 +51,25 @@ class OnboardingScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 40),
-              const Text(
+              Text(
                 'Take Control\nof Your Expenses',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 28,
                   height: 1.25,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+                  color: AppColors.textPrimaryFor(context),
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'Track your spending, manage budgets, '
                 'and share expenses with friends — all in one place.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 15,
                   height: 1.6,
-                  color: AppColors.textSecondary,
+                  color: AppColors.textSecondaryFor(context),
                 ),
               ),
               const SizedBox(height: 24),
@@ -92,11 +92,11 @@ class OnboardingScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'Your finances, organized simply.',
                 style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.textSecondary,
+                  color: AppColors.textSecondaryFor(context),
                 ),
               ),
               const SizedBox(height: 16),
