@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../../app.dart';
 import '../../core/theme/app_colors.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final Map<String, dynamic>? existingTransaction;
 
-  const AddExpenseScreen({super.key, this.existingTransaction});
+  const AddExpenseScreen({
+    super.key,
+    this.existingTransaction,
+  });
 
   @override
   State<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -19,7 +23,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   String _type = 'Expense';
   String _category = 'Food';
   String _paymentMethod = 'Cash';
+
   DateTime _selectedDate = DateTime.now();
+  bool _existingAmountInitialized = false;
 
   final List<String> _expenseCategories = [
     'Food',
@@ -56,7 +62,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     super.initState();
 
     final transaction = widget.existingTransaction;
-
     if (transaction == null) return;
 
     _type = transaction['type'] == 'Income' ? 'Income' : 'Expense';
@@ -71,10 +76,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         ? savedCategory
         : (_type == 'Expense' ? 'Food' : 'Salary');
 
-    final savedAmount = transaction['amount'];
-
-    _amountController.text = savedAmount is num ? savedAmount.toString() : '';
-
     _notesController.text = transaction['notes']?.toString() ?? '';
 
     final savedPaymentMethod =
@@ -84,13 +85,38 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         ? savedPaymentMethod
         : 'Cash';
 
-    final savedDate = DateTime.tryParse(transaction['date']?.toString() ?? '');
+    final savedDate =
+        DateTime.tryParse(transaction['date']?.toString() ?? '');
 
     if (savedDate != null) {
       final today = DateTime.now();
-
       _selectedDate = savedDate.isAfter(today) ? today : savedDate;
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (_existingAmountInitialized) return;
+    _existingAmountInitialized = true;
+
+    final savedAmount = widget.existingTransaction?['amount'];
+
+    if (savedAmount is num) {
+      final currency = CurrencyProvider.of(context);
+      final convertedAmount = currency.convertFromPKR(savedAmount);
+
+      // If the selected currency rate is unavailable, do not silently
+      // present the PKR value as though it were another currency.
+      _amountController.text = convertedAmount == null
+          ? ''
+          : _formatInputAmount(convertedAmount);
+    }
+  }
+
+  String _formatInputAmount(double amount) {
+    return amount.toStringAsFixed(2);
   }
 
   @override
@@ -108,6 +134,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       initialDate: _selectedDate,
       firstDate: DateTime(2000),
       lastDate: DateTime(today.year, today.month, today.day),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context),
+          child: child!,
+        );
+      },
     );
 
     if (picked != null && mounted) {
@@ -120,6 +152,23 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   void _saveTransaction() {
     if (!_formKey.currentState!.validate()) return;
 
+    final enteredAmount = double.parse(_amountController.text.trim());
+    final currency = CurrencyProvider.of(context);
+
+    // The transaction storage format remains PKR.
+    final pkrAmount = currency.convertToPKR(enteredAmount);
+
+    if (pkrAmount == null || !pkrAmount.isFinite || pkrAmount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Exchange rate unavailable. Please refresh rates and try again.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final existing = widget.existingTransaction;
 
     final transaction = <String, dynamic>{
@@ -129,7 +178,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           : _notesController.text.trim(),
       'category': _category,
       'date': _selectedDate.toIso8601String(),
-      'amount': double.parse(_amountController.text.trim()),
+      'amount': pkrAmount,
       'type': _type,
       'paymentMethod': _paymentMethod,
       'notes': _notesController.text.trim(),
@@ -140,9 +189,18 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final categories = _type == 'Expense'
-        ? _expenseCategories
-        : _incomeCategories;
+    final categories =
+        _type == 'Expense' ? _expenseCategories : _incomeCategories;
+
+    final currency = CurrencyProvider.of(context);
+    final currencyCode = currency.currencyCode;
+    final currencySymbol = currency.currencySymbol;
+
+    final textColor = AppColors.textPrimaryFor(context);
+    final secondaryTextColor = AppColors.textSecondaryFor(context);
+    final surfaceColor = AppColors.surfaceFor(context);
+    final borderColor = AppColors.borderFor(context);
+    final primaryColor = AppColors.primaryFor(context);
 
     return Scaffold(
       backgroundColor: AppColors.backgroundFor(context),
@@ -152,7 +210,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: AppColors.backgroundFor(context),
-        foregroundColor: AppColors.primaryFor(context),
+        foregroundColor: primaryColor,
         elevation: 0,
       ),
       body: SafeArea(
@@ -165,22 +223,25 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               Container(
                 padding: const EdgeInsets.all(5),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceFor(context),
+                  color: surfaceColor,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.borderFor(context)),
+                  border: Border.all(color: borderColor),
                 ),
                 child: Row(
-                  children: [_typeButton('Expense'), _typeButton('Income')],
+                  children: [
+                    _typeButton('Expense'),
+                    _typeButton('Income'),
+                  ],
                 ),
               ),
               const SizedBox(height: 28),
 
-              // Amount
+              // Amount in the currently selected currency
               Text(
-                'Amount (PKR)',
+                'Amount ($currencyCode)',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimaryFor(context),
+                  color: textColor,
                 ),
               ),
               const SizedBox(height: 10),
@@ -189,24 +250,42 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
+                style: TextStyle(color: textColor),
                 decoration: InputDecoration(
                   hintText: '0.00',
-                  prefixText: 'PKR ',
+                  prefixText: '$currencySymbol ',
+                  prefixStyle: TextStyle(
+                    color: textColor,
+                    fontWeight: FontWeight.w600,
+                  ),
                   filled: true,
-                  fillColor: AppColors.surfaceFor(context),
+                  fillColor: surfaceColor,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 18,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: AppColors.borderFor(context)),
+                    borderSide: BorderSide(color: borderColor),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: AppColors.borderFor(context)),
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: AppColors.primary,
+                      width: 1.5,
+                    ),
                   ),
                 ),
                 validator: (value) {
                   final amount = double.tryParse(value?.trim() ?? '');
 
-                  if (amount == null || !amount.isFinite || amount <= 0) {
+                  if (amount == null ||
+                      !amount.isFinite ||
+                      amount <= 0) {
                     return 'Enter a valid amount greater than zero';
                   }
 
@@ -220,6 +299,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               DropdownButtonFormField<String>(
                 initialValue: _category,
                 isExpanded: true,
+                dropdownColor: surfaceColor,
+                style: TextStyle(color: textColor),
                 decoration: _decoration(),
                 items: categories
                     .map(
@@ -246,13 +327,16 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 borderRadius: BorderRadius.circular(16),
                 child: InputDecorator(
                   decoration: _decoration(
-                    suffixIcon: const Icon(Icons.calendar_month_outlined),
+                    suffixIcon: Icon(
+                      Icons.calendar_month_outlined,
+                      color: secondaryTextColor,
+                    ),
                   ),
                   child: Text(
                     '${_selectedDate.day.toString().padLeft(2, '0')}/'
                     '${_selectedDate.month.toString().padLeft(2, '0')}/'
                     '${_selectedDate.year}',
-                    style: TextStyle(color: AppColors.textPrimaryFor(context)),
+                    style: TextStyle(color: textColor),
                   ),
                 ),
               ),
@@ -263,11 +347,15 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               DropdownButtonFormField<String>(
                 initialValue: _paymentMethod,
                 isExpanded: true,
+                dropdownColor: surfaceColor,
+                style: TextStyle(color: textColor),
                 decoration: _decoration(),
                 items: _paymentMethods
                     .map(
-                      (method) =>
-                          DropdownMenuItem(value: method, child: Text(method)),
+                      (method) => DropdownMenuItem(
+                        value: method,
+                        child: Text(method),
+                      ),
                     )
                     .toList(),
                 onChanged: (value) {
@@ -286,16 +374,20 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 controller: _notesController,
                 maxLines: 3,
                 maxLength: 200,
-                decoration: _decoration(hintText: 'Add a short description...'),
+                style: TextStyle(color: textColor),
+                decoration: _decoration(
+                  hintText: 'Add a short description...',
+                ),
               ),
               const SizedBox(height: 24),
 
+              // Save button
               SizedBox(
                 height: 54,
                 child: ElevatedButton(
                   onPressed: _saveTransaction,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: primaryColor,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -319,10 +411,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   Widget _typeButton(String type) {
     final selected = _type == type;
+    final primaryColor = AppColors.primaryFor(context);
 
     return Expanded(
       child: GestureDetector(
         onTap: () {
+          if (_type == type) return;
+
           setState(() {
             _type = type;
             _category = type == 'Expense' ? 'Food' : 'Salary';
@@ -332,14 +427,16 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 13),
           decoration: BoxDecoration(
-            color: selected ? AppColors.primary : Colors.transparent,
+            color: selected ? primaryColor : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
             type,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: selected ? Colors.white : AppColors.textSecondaryFor(context),
+              color: selected
+                  ? Colors.white
+                  : AppColors.textSecondaryFor(context),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -361,20 +458,38 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     );
   }
 
-  InputDecoration _decoration({String? hintText, Widget? suffixIcon}) {
+  InputDecoration _decoration({
+    String? hintText,
+    Widget? suffixIcon,
+  }) {
+    final borderColor = AppColors.borderFor(context);
+
     return InputDecoration(
       hintText: hintText,
+      hintStyle: TextStyle(
+        color: AppColors.textSecondaryFor(context),
+      ),
       suffixIcon: suffixIcon,
       filled: true,
       fillColor: AppColors.surfaceFor(context),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 16,
+      ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: AppColors.borderFor(context)),
+        borderSide: BorderSide(color: borderColor),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: AppColors.borderFor(context)),
+        borderSide: BorderSide(color: borderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(
+          color: AppColors.primary,
+          width: 1.5,
+        ),
       ),
     );
   }

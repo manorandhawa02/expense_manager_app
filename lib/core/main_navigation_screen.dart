@@ -29,9 +29,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   List<Widget> get _screens => [
   HomeScreen(
   key: _homeKey,
-  onNavigate: (index) {
-    _onNavigationTap(index);
-  },
+  onNavigate: _onNavigationTap,
+  onAddTransaction: _openAddTransaction,
 ),
   TransactionsScreen(
     key: _transactionsKey,
@@ -190,6 +189,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 }
 
+// ignore: unused_element
 class _PlaceholderScreen extends StatelessWidget {
   final String title;
 

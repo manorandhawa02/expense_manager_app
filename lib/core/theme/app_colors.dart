@@ -1,63 +1,71 @@
-
 import 'package:flutter/material.dart';
 
 class AppColors {
   AppColors._();
 
+  // Brand colors
   static const Color primary = Color(0xFF075E63);
+  static const Color darkPrimary = Color(0xFF66D9CF);
   static const Color mint = Color(0xFFA8DED0);
   static const Color accent = Color(0xFFD7A85B);
 
+  // Semantic colors
   static const Color expense = Color(0xFFD9534F);
   static const Color income = Color(0xFF23865B);
+  static const Color darkExpense = Color(0xFFFF8585);
+  static const Color darkIncome = Color(0xFF73D6A0);
 
+  // Light palette
   static const Color lightBackground = Color(0xFFF7F1E8);
   static const Color lightSurface = Color(0xFFFFFFFF);
   static const Color lightTextPrimary = Color(0xFF253638);
-  static const Color lightTextSecondary = Color(0xFF758180);
-  static const Color lightBorder = Color(0xFFE5E0D7);
+  static const Color lightTextSecondary = Color(0xFF657575);
+  static const Color lightBorder = Color(0xFFE2DCD2);
 
+  // Dark palette
   static const Color darkBackground = Color(0xFF101820);
   static const Color darkSurface = Color(0xFF1C2732);
   static const Color darkTextPrimary = Color(0xFFF1F5F9);
   static const Color darkTextSecondary = Color(0xFFB0BEC5);
   static const Color darkBorder = Color(0xFF344252);
 
-  static Color get background => _current(Brightness.light, lightBackground);
-  static Color get surface => _current(Brightness.light, lightSurface);
-  static Color get textPrimary => _current(Brightness.light, lightTextPrimary);
-  static Color get textSecondary => _current(Brightness.light, lightTextSecondary);
-  static Color get border => _current(Brightness.light, lightBorder);
+  // Backward-compatible defaults.
+  // These are LIGHT-theme values only.
+  // Prefer the context-aware methods inside widgets.
+  static Color get background => lightBackground;
+  static Color get surface => lightSurface;
+  static Color get textPrimary => lightTextPrimary;
+  static Color get textSecondary => lightTextSecondary;
+  static Color get border => lightBorder;
 
-  static Color _current(Brightness brightness, Color color) => color;
+  static bool _isDark(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark;
 
   static Color backgroundFor(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? darkBackground
-          : lightBackground;
+      _isDark(context) ? darkBackground : lightBackground;
 
   static Color surfaceFor(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? darkSurface
-          : lightSurface;
+      _isDark(context) ? darkSurface : lightSurface;
 
   static Color textPrimaryFor(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? darkTextPrimary
-          : lightTextPrimary;
+      _isDark(context) ? darkTextPrimary : lightTextPrimary;
 
   static Color textSecondaryFor(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? darkTextSecondary
-          : lightTextSecondary;
+      _isDark(context) ? darkTextSecondary : lightTextSecondary;
 
   static Color borderFor(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? darkBorder
-          : lightBorder;
+      _isDark(context) ? darkBorder : lightBorder;
 
-  static Color? primaryFor(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? darkBackground
-          : lightBackground;
+  // Corrected: primaryFor returns a brand color, not a background.
+  static Color primaryFor(BuildContext context) =>
+      _isDark(context) ? darkPrimary : primary;
+
+  static Color accentFor(BuildContext context) =>
+      _isDark(context) ? accent : accent;
+
+  static Color expenseFor(BuildContext context) =>
+      _isDark(context) ? darkExpense : expense;
+
+  static Color incomeFor(BuildContext context) =>
+      _isDark(context) ? darkIncome : income;
 }

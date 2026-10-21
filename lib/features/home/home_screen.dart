@@ -1,16 +1,14 @@
-
 import 'package:flutter/material.dart';
 
+import '../../app.dart';
 import '../../core/theme/app_colors.dart';
 import '../transaction/transaction_storage.dart';
 
 class HomeScreen extends StatefulWidget {
   final ValueChanged<int>? onNavigate;
+  final VoidCallback? onAddTransaction;
 
-  const HomeScreen({
-    super.key,
-    this.onNavigate,
-  });
+  const HomeScreen({super.key, this.onNavigate, this.onAddTransaction});
 
   @override
   State<HomeScreen> createState() => HomeScreenState();
@@ -28,8 +26,7 @@ class HomeScreenState extends State<HomeScreen> {
 
   Future<void> loadTransactions() async {
     try {
-      final savedTransactions =
-          await TransactionStorage.getTransactions();
+      final savedTransactions = await TransactionStorage.getTransactions();
 
       if (!mounted) return;
 
@@ -45,9 +42,7 @@ class HomeScreenState extends State<HomeScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to load dashboard transactions.'),
-        ),
+        const SnackBar(content: Text('Unable to load dashboard transactions.')),
       );
     }
   }
@@ -60,9 +55,7 @@ class HomeScreenState extends State<HomeScreen> {
           if (transaction['type'] != type) return false;
           if (!thisMonth) return true;
 
-          final date = DateTime.tryParse(
-            transaction['date']?.toString() ?? '',
-          );
+          final date = DateTime.tryParse(transaction['date']?.toString() ?? '');
 
           return date != null &&
               date.year == now.year &&
@@ -75,22 +68,12 @@ class HomeScreenState extends State<HomeScreen> {
         });
   }
 
-  String _formatAmount(double amount) {
-    final roundedAmount = amount.round();
-    final isNegative = roundedAmount < 0;
-    final digits = roundedAmount.abs().toString();
 
-    final formatted = digits.replaceAllMapped(
-      RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (match) => ',',
-    );
+ String _displayAmount(double amount) {
+  if (_isLoading) return '...';
 
-    return '${isNegative ? '-' : ''}$formatted';
-  }
-
-  String _displayAmount(double amount) {
-    return _isLoading ? '...' : 'PKR ${_formatAmount(amount)}';
-  }
+  return CurrencyProvider.of(context).formatAmount(amount);
+}
 
   List<Map<String, dynamic>> get _recentTransactions {
     final sorted = List<Map<String, dynamic>>.from(_transactions);
@@ -115,8 +98,7 @@ class HomeScreenState extends State<HomeScreen> {
     for (final transaction in _transactions) {
       if (transaction['type'] != 'Expense') continue;
 
-      final category =
-          transaction['category']?.toString().trim();
+      final category = transaction['category']?.toString().trim();
 
       final amount = transaction['amount'];
 
@@ -124,13 +106,11 @@ class HomeScreenState extends State<HomeScreen> {
         continue;
       }
 
-      totals[category] =
-          (totals[category] ?? 0) + amount.toDouble();
+      totals[category] = (totals[category] ?? 0) + amount.toDouble();
     }
 
     return Map.fromEntries(
-      totals.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value)),
+      totals.entries.toList()..sort((a, b) => b.value.compareTo(a.value)),
     );
   }
 
@@ -177,9 +157,7 @@ class HomeScreenState extends State<HomeScreen> {
 
   void _showFeatureMessage(String feature) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$feature will be implemented next.'),
-      ),
+      SnackBar(content: Text('$feature will be implemented next.')),
     );
   }
 
@@ -194,8 +172,10 @@ class HomeScreenState extends State<HomeScreen> {
     final monthlySavings = monthlyIncome - monthlyExpenses;
 
     final categories = _categoryTotals;
-    final totalCategorizedExpenses =
-        categories.values.fold<double>(0, (sum, value) => sum + value);
+    final totalCategorizedExpenses = categories.values.fold<double>(
+      0,
+      (sum, value) => sum + value,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.backgroundFor(context),
@@ -332,7 +312,7 @@ class HomeScreenState extends State<HomeScreen> {
                       child: _buildQuickAction(
                         icon: Icons.add,
                         label: 'Add Expense',
-                        onTap: () => widget.onNavigate?.call(1),
+                        onTap: () => widget.onAddTransaction?.call(),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -352,9 +332,7 @@ class HomeScreenState extends State<HomeScreen> {
                       child: _buildQuickAction(
                         icon: Icons.swap_horiz,
                         label: 'Settle Up',
-                        onTap: () => _showFeatureMessage(
-                          'Settle Up shortcut',
-                        ),
+                        onTap: () => _showFeatureMessage('Settle Up shortcut'),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -362,7 +340,7 @@ class HomeScreenState extends State<HomeScreen> {
                       child: _buildQuickAction(
                         icon: Icons.pie_chart_outline,
                         label: 'Reports',
-                        onTap: () => _showFeatureMessage('Reports'),
+                        onTap: () => widget.onNavigate?.call(3),
                       ),
                     ),
                   ],
@@ -453,9 +431,10 @@ class HomeScreenState extends State<HomeScreen> {
                     final category =
                         transaction['category']?.toString() ?? 'Other';
                     final title =
-                        transaction['title']?.toString().trim().isNotEmpty == true
-                            ? transaction['title'].toString()
-                            : category;
+                        transaction['title']?.toString().trim().isNotEmpty ==
+                            true
+                        ? transaction['title'].toString()
+                        : category;
                     final isIncome = type == 'Income';
 
                     return Card(
@@ -480,12 +459,10 @@ class HomeScreenState extends State<HomeScreen> {
                         trailing: FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            '${isIncome ? '+' : '-'}PKR ${_formatAmount(amount)}',
+                            '${isIncome ? '+' : '-'}${CurrencyProvider.of(context).formatAmount(amount)}',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              color: isIncome
-                                  ? AppColors.primary
-                                  : Colors.red,
+                              color: isIncome ? AppColors.primary : Colors.red,
                             ),
                           ),
                         ),
@@ -546,7 +523,7 @@ class HomeScreenState extends State<HomeScreen> {
                                       ),
                                     ),
                                     Text(
-                                      'PKR ${_formatAmount(entry.value)}',
+                                      CurrencyProvider.of(context).formatAmount(entry.value),
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -559,9 +536,10 @@ class HomeScreenState extends State<HomeScreen> {
                                   child: LinearProgressIndicator(
                                     value: fraction,
                                     minHeight: 8,
-                                    backgroundColor: AppColors.borderFor(context),
-                                    valueColor:
-                                        AlwaysStoppedAnimation<Color>(
+                                    backgroundColor: AppColors.borderFor(
+                                      context,
+                                    ),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
                                       AppColors.primary,
                                     ),
                                   ),
@@ -573,7 +551,9 @@ class HomeScreenState extends State<HomeScreen> {
                                     '${(fraction * 100).toStringAsFixed(1)}%',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: AppColors.textSecondaryFor(context),
+                                      color: AppColors.textSecondaryFor(
+                                        context,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -644,7 +624,7 @@ class HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surfaceFor(context).withValues(alpha: 0.12),
+        color: Colors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -686,10 +666,7 @@ class HomeScreenState extends State<HomeScreen> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.symmetric(
-            vertical: 16,
-            horizontal: 6,
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppColors.borderFor(context)),

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../transaction/transaction_storage.dart';
 import '../settings/settings_screen.dart';
-
+import '../../app.dart';
 class ReportsScreen extends StatefulWidget {
   final Future<void> Function()? onTransactionsChanged;
 
@@ -81,8 +81,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   String _formatAmount(double amount) {
-    return 'PKR ${amount.toStringAsFixed(2)}';
-  }
+  return CurrencyProvider.of(context).formatAmount(amount);
+}
 
   String get _monthLabel {
     const months = [

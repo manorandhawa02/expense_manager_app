@@ -1,7 +1,7 @@
-
 import 'package:flutter/material.dart';
-
+import '../../app.dart';
 import '../../core/theme/app_colors.dart';
+import 'add_expense_screen.dart';
 import 'transaction_storage.dart';
 
 class TransactionsScreen extends StatefulWidget {
@@ -42,8 +42,7 @@ class TransactionsScreenState extends State<TransactionsScreen> {
 
   Future<void> loadTransactions() async {
     try {
-      final savedTransactions =
-          await TransactionStorage.getTransactions();
+      final savedTransactions = await TransactionStorage.getTransactions();
 
       if (!mounted) return;
 
@@ -51,7 +50,7 @@ class TransactionsScreenState extends State<TransactionsScreen> {
         _transactions = savedTransactions;
         _isLoading = false;
       });
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
 
       setState(() {
@@ -69,20 +68,14 @@ class TransactionsScreenState extends State<TransactionsScreen> {
   double _totalFor(String type) {
     return _filteredTransactions
         .where((transaction) => transaction['type'] == type)
-        .fold<double>(
-          0,
-          (total, transaction) {
-            final amount = transaction['amount'];
-            return total + (amount is num ? amount.toDouble() : 0);
-          },
-        );
+        .fold<double>(0, (total, transaction) {
+      final amount = transaction['amount'];
+      return total + (amount is num ? amount.toDouble() : 0);
+    });
   }
 
   String _formatAmount(num amount) {
-    return amount.toStringAsFixed(0).replaceAllMapped(
-          RegExp(r'\B(?=(\d{3})+(?!\d))'),
-          (match) => ',',
-        );
+    return CurrencyProvider.of(context).formatAmount(amount);
   }
 
   String _formatDate(String value) {
@@ -137,6 +130,63 @@ class TransactionsScreenState extends State<TransactionsScreen> {
         : const Color(0xFFFFE6C7);
   }
 
+  Future<void> _editTransaction(
+    Map<String, dynamic> transaction,
+  ) async {
+    try {
+      if (widget.onEdit != null) {
+        await widget.onEdit!(transaction);
+
+        if (mounted) {
+          await loadTransactions();
+        }
+        return;
+      }
+
+      final result = await Navigator.push<Map<String, dynamic>>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AddExpenseScreen(
+            existingTransaction: transaction,
+          ),
+        ),
+      );
+
+      if (result == null || !mounted) return;
+
+      final updated = await TransactionStorage.updateTransaction(result);
+
+      if (!mounted) return;
+
+      if (!updated) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Transaction could not be found.'),
+          ),
+        );
+        return;
+      }
+
+      await loadTransactions();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Transaction updated successfully.'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to update transaction.'),
+        ),
+      );
+    }
+  }
+
   Future<void> _confirmDelete(
     Map<String, dynamic> transaction,
   ) async {
@@ -168,23 +218,67 @@ class TransactionsScreenState extends State<TransactionsScreen> {
 
     if (confirmed != true || !mounted) return;
 
-    final deleteCallback = widget.onDelete;
+    try {
+      if (widget.onDelete != null) {
+        await widget.onDelete!(transaction);
 
-    if (deleteCallback == null) {
+        if (mounted) {
+          await loadTransactions();
+        }
+        return;
+      }
+
+      final id = transaction['id']?.toString();
+
+      if (id == null || id.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This transaction has no valid ID.'),
+          ),
+        );
+        return;
+      }
+
+      final deleted = await TransactionStorage.deleteTransaction(id);
+
+      if (!mounted) return;
+
+      if (!deleted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Transaction could not be found.'),
+          ),
+        );
+        return;
+      }
+
+      await loadTransactions();
+
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Delete functionality is not connected yet.'),
+          content: Text('Transaction deleted successfully.'),
         ),
       );
-      return;
-    }
+    } catch (_) {
+      if (!mounted) return;
 
-    await deleteCallback(transaction);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to delete transaction.'),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = AppColors.textPrimaryFor(context);
+    final secondaryColor = AppColors.textSecondaryFor(context);
+    final surfaceColor = AppColors.surfaceFor(context);
+    final borderColor = AppColors.borderFor(context);
+    final primaryColor = AppColors.primaryFor(context);
 
     return Scaffold(
       backgroundColor: AppColors.backgroundFor(context),
@@ -202,7 +296,7 @@ class TransactionsScreenState extends State<TransactionsScreen> {
                   style: TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
+                    color: primaryColor,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -210,7 +304,7 @@ class TransactionsScreenState extends State<TransactionsScreen> {
                   'Track your income and expenses',
                   style: TextStyle(
                     fontSize: 14,
-                    color: AppColors.textSecondaryFor(context),
+                    color: secondaryColor,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -220,7 +314,7 @@ class TransactionsScreenState extends State<TransactionsScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: AppColors.primary,
+                    color: primaryColor,
                     borderRadius: BorderRadius.circular(22),
                   ),
                   child: Column(
@@ -244,9 +338,7 @@ class TransactionsScreenState extends State<TransactionsScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        _isLoading
-                            ? '...'
-                            : '${_filteredTransactions.length}',
+                        _isLoading ? '...' : '${_filteredTransactions.length}',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 30,
@@ -284,12 +376,12 @@ class TransactionsScreenState extends State<TransactionsScreen> {
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimaryFor(context),
+                    color: textColor,
                   ),
                 ),
                 const SizedBox(height: 14),
 
-                // Transaction filters
+                // Filters
                 Row(
                   children: ['All', 'Expense', 'Income'].map((filter) {
                     final selected = _selectedFilter == filter;
@@ -303,17 +395,15 @@ class TransactionsScreenState extends State<TransactionsScreen> {
                           ),
                           selected: selected,
                           showCheckmark: false,
-                          selectedColor: AppColors.primary,
-                          backgroundColor: AppColors.surfaceFor(context),
+                          selectedColor: primaryColor,
+                          backgroundColor: surfaceColor,
                           side: BorderSide(
                             color: selected
-                                ? AppColors.primary
-                                : AppColors.borderFor(context),
+                                ? (primaryColor)
+                                : borderColor,
                           ),
                           labelStyle: TextStyle(
-                            color: selected
-                                ? Colors.white
-                                : AppColors.textPrimaryFor(context),
+                            color: selected ? Colors.white : textColor,
                             fontWeight: FontWeight.w600,
                           ),
                           onSelected: (_) {
@@ -329,7 +419,7 @@ class TransactionsScreenState extends State<TransactionsScreen> {
 
                 const SizedBox(height: 16),
 
-                // Saved transaction list
+                // Transaction list
                 if (_isLoading)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 40),
@@ -346,7 +436,7 @@ class TransactionsScreenState extends State<TransactionsScreen> {
                           Icon(
                             Icons.receipt_long_outlined,
                             size: 48,
-                            color: AppColors.textSecondaryFor(context),
+                            color: secondaryColor,
                           ),
                           const SizedBox(height: 12),
                           Text(
@@ -354,16 +444,14 @@ class TransactionsScreenState extends State<TransactionsScreen> {
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimaryFor(context),
+                              color: textColor,
                             ),
                           ),
                           const SizedBox(height: 6),
                           Text(
                             'Tap + to add your first transaction.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: AppColors.textSecondaryFor(context),
-                            ),
+                            style: TextStyle(color: secondaryColor),
                           ),
                         ],
                       ),
@@ -405,7 +493,7 @@ class TransactionsScreenState extends State<TransactionsScreen> {
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
           child: Text(
-            'PKR ${_formatAmount(amount)}',
+            _formatAmount(amount),
             style: const TextStyle(
               color: Colors.white,
               fontSize: 17,
@@ -421,8 +509,8 @@ class TransactionsScreenState extends State<TransactionsScreen> {
     Map<String, dynamic> transaction,
   ) {
     final isIncome = transaction['type'] == 'Income';
-    final category = transaction['category'] as String? ?? 'Other';
-    final title = transaction['title'] as String? ?? category;
+    final category = transaction['category']?.toString() ?? 'Other';
+    final title = transaction['title']?.toString() ?? category;
     final date = transaction['date']?.toString() ?? '';
     final rawAmount = transaction['amount'];
     final amount = rawAmount is num ? rawAmount.toDouble() : 0.0;
@@ -446,11 +534,13 @@ class TransactionsScreenState extends State<TransactionsScreen> {
             ),
             child: Icon(
               _categoryIcon(category),
-              color: AppColors.primary,
+              color: AppColors.primaryFor(context),
               size: 23,
             ),
           ),
           const SizedBox(width: 12),
+
+          // Transaction details
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -477,10 +567,13 @@ class TransactionsScreenState extends State<TransactionsScreen> {
             ),
           ),
           const SizedBox(width: 8),
+
+          // Converted amount
           Flexible(
             child: Text(
-              '${isIncome ? '+' : '-'} PKR ${_formatAmount(amount)}',
+              '${isIncome ? '+' : '-'}${_formatAmount(amount)}',
               textAlign: TextAlign.end,
+              maxLines: 2,
               style: TextStyle(
                 color: isIncome
                     ? const Color(0xFF23865A)
@@ -491,6 +584,8 @@ class TransactionsScreenState extends State<TransactionsScreen> {
             ),
           ),
           const SizedBox(width: 4),
+
+          // Edit and delete options
           PopupMenuButton<String>(
             tooltip: 'Transaction options',
             icon: Icon(
@@ -499,19 +594,7 @@ class TransactionsScreenState extends State<TransactionsScreen> {
             ),
             onSelected: (value) {
               if (value == 'edit') {
-                final editCallback = widget.onEdit;
-
-                if (editCallback != null) {
-                  editCallback(transaction);
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Edit functionality is not connected yet.',
-                      ),
-                    ),
-                  );
-                }
+                _editTransaction(transaction);
               } else if (value == 'delete') {
                 _confirmDelete(transaction);
               }
