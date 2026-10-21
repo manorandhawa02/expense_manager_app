@@ -12,8 +12,6 @@ class AppTheme {
     return _buildTheme(Brightness.dark);
   }
 
-
-
   static ThemeData _buildTheme(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
 
@@ -71,7 +69,7 @@ iconTheme: IconThemeData(
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
+          borderSide: const BorderSide(
             color: AppColors.primary,
             width: 1.5,
           ),
@@ -90,4 +88,3 @@ iconTheme: IconThemeData(
     );
   }
 }
- 
