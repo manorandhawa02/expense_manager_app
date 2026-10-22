@@ -2,14 +2,111 @@ import 'package:flutter/material.dart';
 import '../../app.dart';
 import '../../core/theme/app_colors.dart';
 import '../transaction/transaction_storage.dart';
-
-class SettingsScreen extends StatelessWidget {
+import 'profile_storage.dart';
+class SettingsScreen extends StatefulWidget {
   final Future<void> Function()? onTransactionsCleared;
 
   const SettingsScreen({
     super.key,
     this.onTransactionsCleared,
   });
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  String _profileName = 'Mano';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileName();
+  }
+
+  Future<void> _loadProfileName() async {
+    final name = await ProfileStorage.getName();
+
+    if (!mounted) return;
+
+    setState(() {
+      _profileName = name;
+    });
+  }
+
+  Future<void> _editProfileName() async {
+    final controller = TextEditingController(text: _profileName);
+
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Your name'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          maxLength: 40,
+          decoration: const InputDecoration(
+            hintText: 'Enter your name',
+          ),
+          onSubmitted: (value) {
+            if (value.trim().isNotEmpty) {
+              Navigator.pop(dialogContext, value.trim());
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                Navigator.pop(dialogContext, controller.text.trim());
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+
+    if (name == null || name.trim().isEmpty || !mounted) return;
+
+    try {
+  await ProfileStorage.saveName(name);
+
+  final savedName = await ProfileStorage.getName();
+
+  debugPrint('Name saved: $savedName');
+
+  if (!mounted) return;
+
+  setState(() {
+    _profileName = savedName;
+  });
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('Name saved successfully.'),
+    ),
+  );
+} catch (error, stackTrace) {
+  debugPrint('NAME SAVE ERROR: $error');
+  debugPrintStack(stackTrace: stackTrace);
+
+  if (!mounted) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text('Name save error: $error'),
+    ),
+  );
+}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,25 +120,33 @@ class SettingsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          _buildSectionTitle(context, 'Preferences'),
+          _buildSectionTitle(context, 'Profile & display'),
           const SizedBox(height: 12),
           _buildSettingsCard(context, [
-            _buildSettingsTile(
-              context: context,
-              icon: Icons.palette_outlined,
-              title: 'Appearance',
-              subtitle: 'Customize your app theme',
-              onTap: () => _showAppearanceDialog(context),
-            ),
-            _buildDivider(context),
-            _buildSettingsTile(
-              context: context,
-              icon: Icons.currency_exchange_rounded,
-              title: 'Currency',
-              subtitle: 'Choose your preferred currency',
-              onTap: () => _showCurrencyDialog(context),
-            ),
-          ]),
+  _buildSettingsTile(
+    context: context,
+    icon: Icons.person_outline,
+    title: 'Your name',
+    subtitle: _profileName,
+    onTap: _editProfileName,
+  ),
+  _buildDivider(context),
+  _buildSettingsTile(
+    context: context,
+    icon: Icons.palette_outlined,
+    title: 'Appearance',
+    subtitle: 'Customize your app theme',
+    onTap: () => _showAppearanceDialog(context),
+  ),
+  _buildDivider(context),
+  _buildSettingsTile(
+    context: context,
+    icon: Icons.currency_exchange_rounded,
+    title: 'Currency',
+    subtitle: 'Choose your preferred currency',
+    onTap: () => _showCurrencyDialog(context),
+  ),
+]),
           const SizedBox(height: 24),
 
           _buildSectionTitle(context, 'Data Management'),
@@ -229,7 +334,7 @@ class SettingsScreen extends StatelessWidget {
     if (confirmed != true) return;
 
     await TransactionStorage.clearTransactions();
-    await onTransactionsCleared?.call();
+    await widget.onTransactionsCleared?.call();
 
     if (!context.mounted) return;
 

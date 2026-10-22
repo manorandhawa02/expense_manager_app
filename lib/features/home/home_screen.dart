@@ -1,15 +1,23 @@
+
 import 'package:flutter/material.dart';
+
 import '../groups/group_storage.dart';
 import '../groups/group_balances_screen.dart';
 import '../../app.dart';
 import '../../core/theme/app_colors.dart';
 import '../transaction/transaction_storage.dart';
+import '../settings/settings_screen.dart';
+import '../settings/profile_storage.dart';
 
 class HomeScreen extends StatefulWidget {
   final ValueChanged<int>? onNavigate;
   final VoidCallback? onAddTransaction;
 
-  const HomeScreen({super.key, this.onNavigate, this.onAddTransaction});
+  const HomeScreen({
+    super.key,
+    this.onNavigate,
+    this.onAddTransaction,
+  });
 
   @override
   State<HomeScreen> createState() => HomeScreenState();
@@ -18,66 +26,115 @@ class HomeScreen extends StatefulWidget {
 class HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _transactions = [];
   bool _isLoading = true;
+  String _profileName = 'Mano';
 
   @override
   void initState() {
     super.initState();
     loadTransactions();
+    _loadProfileName();
   }
-  Future<void> _openSettleUp() async {
-  try {
-    final groups = await GroupStorage.getGroups();
 
-    if (!mounted) return;
+  // LOAD the saved name. Do not save it inside this method.
+  Future<void> _loadProfileName() async {
+    try {
+      final savedName = await ProfileStorage.getName();
 
-    if (groups.isEmpty) {
-      _showFeatureMessage('Create a group first to use Settle Up');
-      return;
+      if (!mounted) return;
+
+      setState(() {
+        _profileName = savedName.trim().isNotEmpty
+            ? savedName.trim()
+            : 'Mano';
+      });
+    } catch (error, stackTrace) {
+      debugPrint('Profile name loading error: $error');
+      debugPrintStack(stackTrace: stackTrace);
     }
+  }
 
-    if (groups.length == 1) {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => GroupBalancesScreen(group: groups.first),
-        ),
-      );
-      return;
-    }
-
-    final selectedGroup = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (dialogContext) => SimpleDialog(
-        title: const Text('Select a group'),
-        children: groups.map((group) {
-          return SimpleDialogOption(
-            onPressed: () => Navigator.pop(dialogContext, group),
-            child: Text(group['name']?.toString() ?? 'Unnamed Group'),
-          );
-        }).toList(),
-      ),
-    );
-
-    if (selectedGroup == null || !mounted) return;
-
+  // Open Settings and refresh the name when the user returns.
+  Future<void> _openProfile() async {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => GroupBalancesScreen(group: selectedGroup),
+        builder: (_) => const SettingsScreen(),
       ),
     );
-  } catch (_) {
+
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not open Settle Up.')),
-    );
+    await _loadProfileName();
   }
-}
+
+  Future<void> _openSettleUp() async {
+    try {
+      final groups = await GroupStorage.getGroups();
+
+      if (!mounted) return;
+
+      if (groups.isEmpty) {
+        _showFeatureMessage(
+          'Create a group first to use Settle Up',
+        );
+        return;
+      }
+
+      if (groups.length == 1) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                GroupBalancesScreen(group: groups.first),
+          ),
+        );
+        return;
+      }
+
+      final selectedGroup =
+          await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (dialogContext) => SimpleDialog(
+          title: const Text('Select a group'),
+          children: groups.map((group) {
+            return SimpleDialogOption(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, group),
+              child: Text(
+                group['name']?.toString() ?? 'Unnamed Group',
+              ),
+            );
+          }).toList(),
+        ),
+      );
+
+      if (selectedGroup == null || !mounted) return;
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              GroupBalancesScreen(group: selectedGroup),
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Settle Up error: $error');
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open Settle Up.'),
+        ),
+      );
+    }
+  }
 
   Future<void> loadTransactions() async {
     try {
-      final savedTransactions = await TransactionStorage.getTransactions();
+      final savedTransactions =
+          await TransactionStorage.getTransactions();
 
       if (!mounted) return;
 
@@ -85,7 +142,10 @@ class HomeScreenState extends State<HomeScreen> {
         _transactions = savedTransactions;
         _isLoading = false;
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
+      debugPrint('Transaction loading error: $error');
+      debugPrintStack(stackTrace: stackTrace);
+
       if (!mounted) return;
 
       setState(() {
@@ -93,7 +153,11 @@ class HomeScreenState extends State<HomeScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to load dashboard transactions.')),
+        const SnackBar(
+          content: Text(
+            'Unable to load dashboard transactions.',
+          ),
+        ),
       );
     }
   }
@@ -104,9 +168,12 @@ class HomeScreenState extends State<HomeScreen> {
     return _transactions
         .where((transaction) {
           if (transaction['type'] != type) return false;
+
           if (!thisMonth) return true;
 
-          final date = DateTime.tryParse(transaction['date']?.toString() ?? '');
+          final date = DateTime.tryParse(
+            transaction['date']?.toString() ?? '',
+          );
 
           return date != null &&
               date.year == now.year &&
@@ -114,24 +181,30 @@ class HomeScreenState extends State<HomeScreen> {
         })
         .fold<double>(0, (total, transaction) {
           final amount = transaction['amount'];
+
           if (amount is! num) return total;
+
           return total + amount.toDouble();
         });
   }
 
+  String _displayAmount(double amount) {
+    if (_isLoading) return '...';
 
- String _displayAmount(double amount) {
-  if (_isLoading) return '...';
-
-  return CurrencyProvider.of(context).formatAmount(amount);
-}
+    return CurrencyProvider.of(context).formatAmount(amount);
+  }
 
   List<Map<String, dynamic>> get _recentTransactions {
-    final sorted = List<Map<String, dynamic>>.from(_transactions);
+    final sorted =
+        List<Map<String, dynamic>>.from(_transactions);
 
     sorted.sort((a, b) {
-      final dateA = DateTime.tryParse(a['date']?.toString() ?? '');
-      final dateB = DateTime.tryParse(b['date']?.toString() ?? '');
+      final dateA = DateTime.tryParse(
+        a['date']?.toString() ?? '',
+      );
+      final dateB = DateTime.tryParse(
+        b['date']?.toString() ?? '',
+      );
 
       if (dateA == null && dateB == null) return 0;
       if (dateA == null) return 1;
@@ -149,24 +222,29 @@ class HomeScreenState extends State<HomeScreen> {
     for (final transaction in _transactions) {
       if (transaction['type'] != 'Expense') continue;
 
-      final category = transaction['category']?.toString().trim();
-
+      final category =
+          transaction['category']?.toString().trim();
       final amount = transaction['amount'];
 
-      if (category == null || category.isEmpty || amount is! num) {
+      if (category == null ||
+          category.isEmpty ||
+          amount is! num) {
         continue;
       }
 
-      totals[category] = (totals[category] ?? 0) + amount.toDouble();
+      totals[category] =
+          (totals[category] ?? 0) + amount.toDouble();
     }
 
     return Map.fromEntries(
-      totals.entries.toList()..sort((a, b) => b.value.compareTo(a.value)),
+      totals.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value)),
     );
   }
 
   String _formatDate(dynamic value) {
     final date = DateTime.tryParse(value?.toString() ?? '');
+
     if (date == null) return 'Date unavailable';
 
     final day = date.day.toString().padLeft(2, '0');
@@ -208,7 +286,9 @@ class HomeScreenState extends State<HomeScreen> {
 
   void _showFeatureMessage(String feature) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$feature will be implemented next.')),
+      SnackBar(
+        content: Text('$feature will be implemented next.'),
+      ),
     );
   }
 
@@ -218,12 +298,16 @@ class HomeScreenState extends State<HomeScreen> {
     final totalExpenses = _totalFor('Expense');
     final balance = totalIncome - totalExpenses;
 
-    final monthlyIncome = _totalFor('Income', thisMonth: true);
-    final monthlyExpenses = _totalFor('Expense', thisMonth: true);
+    final monthlyIncome =
+        _totalFor('Income', thisMonth: true);
+    final monthlyExpenses =
+        _totalFor('Expense', thisMonth: true);
     final monthlySavings = monthlyIncome - monthlyExpenses;
 
     final categories = _categoryTotals;
-    final totalCategorizedExpenses = categories.values.fold<double>(
+
+    final totalCategorizedExpenses =
+        categories.values.fold<double>(
       0,
       (sum, value) => sum + value,
     );
@@ -239,39 +323,52 @@ class HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // HEADER
+                // HEADER AND PROFILE ICON
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _greeting(),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondaryFor(context),
-                            letterSpacing: 1.2,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _greeting(),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color:
+                                  AppColors.textSecondaryFor(
+                                context,
+                              ),
+                              letterSpacing: 1.2,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'My Expenses',
-                          style: TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
+                          const SizedBox(height: 6),
+                          Text(
+                            _profileName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundColor: AppColors.mint,
-                      child: Icon(
-                        Icons.person_outline,
-                        color: AppColors.primary,
-                        size: 28,
+                    const SizedBox(width: 12),
+                    InkWell(
+                      onTap: _openProfile,
+                      borderRadius: BorderRadius.circular(30),
+                      child: CircleAvatar(
+                        radius: 24,
+                        backgroundColor: AppColors.mint,
+                        child: Icon(
+                          Icons.person_outline,
+                          color:
+                              AppColors.primaryFor(context),
+                          size: 28,
+                        ),
                       ),
                     ),
                   ],
@@ -288,7 +385,8 @@ class HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
                     children: [
                       const Row(
                         children: [
@@ -324,7 +422,8 @@ class HomeScreenState extends State<HomeScreen> {
                           Expanded(
                             child: _buildSummaryCard(
                               title: 'Income',
-                              amount: _displayAmount(totalIncome),
+                              amount:
+                                  _displayAmount(totalIncome),
                               icon: Icons.arrow_downward,
                               iconColor: AppColors.mint,
                             ),
@@ -333,9 +432,11 @@ class HomeScreenState extends State<HomeScreen> {
                           Expanded(
                             child: _buildSummaryCard(
                               title: 'Expenses',
-                              amount: _displayAmount(totalExpenses),
+                              amount:
+                                  _displayAmount(totalExpenses),
                               icon: Icons.arrow_upward,
-                              iconColor: const Color(0xFFFFA69A),
+                              iconColor:
+                                  const Color(0xFFFFA69A),
                             ),
                           ),
                         ],
@@ -347,14 +448,7 @@ class HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 24),
 
                 // QUICK ACTIONS
-                Text(
-                  'Quick Actions',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimaryFor(context),
-                  ),
-                ),
+                _sectionTitle('Quick Actions', context),
                 const SizedBox(height: 12),
 
                 Row(
@@ -363,7 +457,8 @@ class HomeScreenState extends State<HomeScreen> {
                       child: _buildQuickAction(
                         icon: Icons.add,
                         label: 'Add Expense',
-                        onTap: () => widget.onAddTransaction?.call(),
+                        onTap: () =>
+                            widget.onAddTransaction?.call(),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -371,7 +466,8 @@ class HomeScreenState extends State<HomeScreen> {
                       child: _buildQuickAction(
                         icon: Icons.group_outlined,
                         label: 'Groups',
-                        onTap: () => widget.onNavigate?.call(2),
+                        onTap: () =>
+                            widget.onNavigate?.call(2),
                       ),
                     ),
                   ],
@@ -391,7 +487,8 @@ class HomeScreenState extends State<HomeScreen> {
                       child: _buildQuickAction(
                         icon: Icons.pie_chart_outline,
                         label: 'Reports',
-                        onTap: () => widget.onNavigate?.call(3),
+                        onTap: () =>
+                            widget.onNavigate?.call(3),
                       ),
                     ),
                   ],
@@ -400,14 +497,7 @@ class HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 28),
 
                 // MONTHLY SUMMARY
-                Text(
-                  'This Month',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimaryFor(context),
-                  ),
-                ),
+                _sectionTitle('This Month', context),
                 const SizedBox(height: 14),
 
                 Row(
@@ -443,18 +533,16 @@ class HomeScreenState extends State<HomeScreen> {
 
                 // RECENT TRANSACTIONS
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment:
+                      MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
+                    _sectionTitle(
                       'Recent Transactions',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimaryFor(context),
-                      ),
+                      context,
                     ),
                     TextButton(
-                      onPressed: () => widget.onNavigate?.call(1),
+                      onPressed: () =>
+                          widget.onNavigate?.call(1),
                       child: const Text('See all'),
                     ),
                   ],
@@ -472,24 +560,32 @@ class HomeScreenState extends State<HomeScreen> {
                   _buildEmptyCard(
                     icon: Icons.receipt_long_outlined,
                     message: 'No transactions yet.',
-                    detail: 'Add your first transaction to get started.',
+                    detail:
+                        'Add your first transaction to get started.',
                   )
                 else
                   ..._recentTransactions.map((transaction) {
-                    final type = transaction['type']?.toString() ?? 'Expense';
+                    final type =
+                        transaction['type']?.toString() ??
+                            'Expense';
                     final amount =
-                        (transaction['amount'] as num?)?.toDouble() ?? 0;
+                        (transaction['amount'] as num?)
+                                ?.toDouble() ??
+                            0;
                     final category =
-                        transaction['category']?.toString() ?? 'Other';
-                    final title =
-                        transaction['title']?.toString().trim().isNotEmpty ==
-                            true
-                        ? transaction['title'].toString()
+                        transaction['category']?.toString() ??
+                            'Other';
+                    final rawTitle =
+                        transaction['title']?.toString().trim();
+                    final title = rawTitle != null &&
+                            rawTitle.isNotEmpty
+                        ? rawTitle
                         : category;
                     final isIncome = type == 'Income';
 
                     return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
+                      margin:
+                          const EdgeInsets.only(bottom: 8),
                       color: AppColors.surfaceFor(context),
                       child: ListTile(
                         leading: CircleAvatar(
@@ -505,15 +601,19 @@ class HomeScreenState extends State<HomeScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Text(
-                          '$category • ${_formatDate(transaction['date'])}',
+                          '$category • '
+                          '${_formatDate(transaction['date'])}',
                         ),
                         trailing: FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            '${isIncome ? '+' : '-'}${CurrencyProvider.of(context).formatAmount(amount)}',
+                            '${isIncome ? '+' : '-'}'
+                            '${CurrencyProvider.of(context).formatAmount(amount)}',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              color: isIncome ? AppColors.primary : Colors.red,
+                              color: isIncome
+                                  ? AppColors.primary
+                                  : Colors.red,
                             ),
                           ),
                         ),
@@ -523,14 +623,10 @@ class HomeScreenState extends State<HomeScreen> {
 
                 const SizedBox(height: 28),
 
-                // CATEGORY-WISE SPENDING
-                Text(
+                // SPENDING BY CATEGORY
+                _sectionTitle(
                   'Spending by Category',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimaryFor(context),
-                  ),
+                  context,
                 ),
                 const SizedBox(height: 12),
 
@@ -540,7 +636,8 @@ class HomeScreenState extends State<HomeScreen> {
                   _buildEmptyCard(
                     icon: Icons.pie_chart_outline,
                     message: 'No expense categories yet.',
-                    detail: 'Your expense breakdown will appear here.',
+                    detail:
+                        'Your expense breakdown will appear here.',
                   )
                 else
                   Card(
@@ -548,13 +645,18 @@ class HomeScreenState extends State<HomeScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
-                        children: categories.entries.map((entry) {
-                          final fraction = totalCategorizedExpenses > 0
-                              ? entry.value / totalCategorizedExpenses
-                              : 0.0;
+                        children:
+                            categories.entries.map((entry) {
+                          final fraction =
+                              totalCategorizedExpenses > 0
+                                  ? entry.value /
+                                      totalCategorizedExpenses
+                                  : 0.0;
 
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: 18),
+                            padding: const EdgeInsets.only(
+                              bottom: 18,
+                            ),
                             child: Column(
                               children: [
                                 Row(
@@ -569,40 +671,49 @@ class HomeScreenState extends State<HomeScreen> {
                                       child: Text(
                                         entry.key,
                                         style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
+                                          fontWeight:
+                                              FontWeight.w600,
                                         ),
                                       ),
                                     ),
                                     Text(
-                                      CurrencyProvider.of(context).formatAmount(entry.value),
+                                      CurrencyProvider.of(context)
+                                          .formatAmount(entry.value),
                                       style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
+                                        fontWeight:
+                                            FontWeight.bold,
                                       ),
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 8),
                                 ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius:
+                                      BorderRadius.circular(8),
                                   child: LinearProgressIndicator(
                                     value: fraction,
                                     minHeight: 8,
-                                    backgroundColor: AppColors.borderFor(
+                                    backgroundColor:
+                                        AppColors.borderFor(
                                       context,
                                     ),
-                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                    valueColor:
+                                        AlwaysStoppedAnimation<
+                                            Color>(
                                       AppColors.primary,
                                     ),
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Align(
-                                  alignment: Alignment.centerRight,
+                                  alignment:
+                                      Alignment.centerRight,
                                   child: Text(
                                     '${(fraction * 100).toStringAsFixed(1)}%',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: AppColors.textSecondaryFor(
+                                      color:
+                                          AppColors.textSecondaryFor(
                                         context,
                                       ),
                                     ),
@@ -625,11 +736,23 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _sectionTitle(String title, BuildContext context) {
+    return Text(
+      title,
+      style: TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.bold,
+        color: AppColors.textPrimaryFor(context),
+      ),
+    );
+  }
+
   String _greeting() {
     final hour = DateTime.now().hour;
 
     if (hour < 12) return 'GOOD MORNING 👋';
     if (hour < 17) return 'GOOD AFTERNOON 👋';
+
     return 'GOOD EVENING 👋';
   }
 
@@ -644,12 +767,18 @@ class HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            Icon(icon, size: 36, color: AppColors.textSecondaryFor(context)),
+            Icon(
+              icon,
+              size: 36,
+              color: AppColors.textSecondaryFor(context),
+            ),
             const SizedBox(height: 8),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
@@ -685,7 +814,10 @@ class HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 8),
           Text(
             title,
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+            ),
           ),
           const SizedBox(height: 6),
           FittedBox(
@@ -717,14 +849,23 @@ class HomeScreenState extends State<HomeScreen> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 6),
+          padding: const EdgeInsets.symmetric(
+            vertical: 16,
+            horizontal: 6,
+          ),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.borderFor(context)),
+            border: Border.all(
+              color: AppColors.borderFor(context),
+            ),
           ),
           child: Column(
             children: [
-              Icon(icon, color: AppColors.primary, size: 26),
+              Icon(
+                icon,
+                color: AppColors.primary,
+                size: 26,
+              ),
               const SizedBox(height: 8),
               Text(
                 label,
@@ -753,7 +894,9 @@ class HomeScreenState extends State<HomeScreen> {
       decoration: BoxDecoration(
         color: AppColors.surfaceFor(context),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.borderFor(context)),
+        border: Border.all(
+          color: AppColors.borderFor(context),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -761,7 +904,11 @@ class HomeScreenState extends State<HomeScreen> {
           CircleAvatar(
             radius: 18,
             backgroundColor: color,
-            child: Icon(icon, color: AppColors.primary, size: 20),
+            child: Icon(
+              icon,
+              color: AppColors.primary,
+              size: 20,
+            ),
           ),
           const SizedBox(height: 12),
           Text(
