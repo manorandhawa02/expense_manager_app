@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-
+import '../groups/group_storage.dart';
+import '../groups/group_balances_screen.dart';
 import '../../app.dart';
 import '../../core/theme/app_colors.dart';
 import '../transaction/transaction_storage.dart';
@@ -23,6 +24,56 @@ class HomeScreenState extends State<HomeScreen> {
     super.initState();
     loadTransactions();
   }
+  Future<void> _openSettleUp() async {
+  try {
+    final groups = await GroupStorage.getGroups();
+
+    if (!mounted) return;
+
+    if (groups.isEmpty) {
+      _showFeatureMessage('Create a group first to use Settle Up');
+      return;
+    }
+
+    if (groups.length == 1) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => GroupBalancesScreen(group: groups.first),
+        ),
+      );
+      return;
+    }
+
+    final selectedGroup = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Select a group'),
+        children: groups.map((group) {
+          return SimpleDialogOption(
+            onPressed: () => Navigator.pop(dialogContext, group),
+            child: Text(group['name']?.toString() ?? 'Unnamed Group'),
+          );
+        }).toList(),
+      ),
+    );
+
+    if (selectedGroup == null || !mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GroupBalancesScreen(group: selectedGroup),
+      ),
+    );
+  } catch (_) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open Settle Up.')),
+    );
+  }
+}
 
   Future<void> loadTransactions() async {
     try {
@@ -332,7 +383,7 @@ class HomeScreenState extends State<HomeScreen> {
                       child: _buildQuickAction(
                         icon: Icons.swap_horiz,
                         label: 'Settle Up',
-                        onTap: () => _showFeatureMessage('Settle Up shortcut'),
+                        onTap: _openSettleUp,
                       ),
                     ),
                     const SizedBox(width: 10),
