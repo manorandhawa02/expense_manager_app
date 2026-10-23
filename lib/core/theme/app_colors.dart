@@ -4,7 +4,7 @@ class AppColors {
   AppColors._();
 
   // Brand colors
-  static const Color primary = Color(0xFF075E63);
+  static const Color primary = Color(0xFF0D1C1B);
   static const Color darkPrimary = Color(0xFF66D9CF);
   static const Color mint = Color(0xFFA8DED0);
   static const Color accent = Color(0xFFD7A85B);
@@ -23,7 +23,7 @@ class AppColors {
   static const Color lightBorder = Color(0xFFE2DCD2);
 
   // Dark palette
-  static const Color darkBackground = Color(0xFF101820);
+  static const Color darkBackground = Color(0xFF0D1C1B);
   static const Color darkSurface = Color(0xFF1C2732);
   static const Color darkTextPrimary = Color(0xFFF1F5F9);
   static const Color darkTextSecondary = Color(0xFFB0BEC5);
@@ -58,7 +58,7 @@ class AppColors {
 
   // Corrected: primaryFor returns a brand color, not a background.
   static Color primaryFor(BuildContext context) =>
-      _isDark(context) ? darkPrimary : primary;
+      _isDark(context) ? const Color.fromARGB(255, 102, 217, 207) : primary;
 
   static Color accentFor(BuildContext context) =>
       _isDark(context) ? accent : accent;

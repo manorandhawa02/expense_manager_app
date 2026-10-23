@@ -43,7 +43,7 @@ class BottomNavigation extends StatelessWidget {
         BottomNavigationBarItem(
           icon: Icon(Icons.more_horiz),
           activeIcon: Icon(Icons.more_horiz),
-          label: 'More',
+          label: 'Reports',
         ),
       ],
     );

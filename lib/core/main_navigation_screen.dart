@@ -7,7 +7,6 @@ import '../features/transaction/transaction_storage.dart';
 import '../widgets/bottom_navigation.dart';
 import 'theme/app_colors.dart';
 import '../features/reports/reports_screen.dart';
-
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
@@ -189,22 +188,3 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 }
 
-// ignore: unused_element
-class _PlaceholderScreen extends StatelessWidget {
-  final String title;
-
-  const _PlaceholderScreen({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Text(
-          '$title screen will be implemented next.',
-          style: const TextStyle(fontSize: 16),
-        ),
-      ),
-    );
-  }
-}

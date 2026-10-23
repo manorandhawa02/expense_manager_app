@@ -350,7 +350,7 @@ class HomeScreenState extends State<HomeScreen> {
                             style: TextStyle(
                               fontSize: 26,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.primary,
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                         ],
