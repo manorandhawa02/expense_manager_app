@@ -151,6 +151,97 @@ class _RecurringTransactionsScreenState
         '${date.year}';
   }
 
+  
+DateTime? _parseDate(dynamic value) {
+  return DateTime.tryParse(value?.toString() ?? '');
+}
+
+DateTime _dateOnly(DateTime date) {
+  return DateTime(date.year, date.month, date.day);
+}
+
+DateTime _addMonthFromAnchor(DateTime anchor, int monthOffset) {
+  final monthIndex = anchor.year * 12 + anchor.month - 1 + monthOffset;
+  final year = monthIndex ~/ 12;
+  final month = monthIndex % 12 + 1;
+  final lastDay = DateTime(year, month + 1, 0).day;
+
+  return DateTime(
+    year,
+    month,
+    anchor.day > lastDay ? lastDay : anchor.day,
+  );
+}
+
+DateTime _nextOccurrence(Map<String, dynamic> rule) {
+  final start = _parseDate(rule['startDate']) ?? DateTime.now();
+  final anchor = DateTime(start.year, start.month, start.day);
+  final lastProcessed = _parseDate(rule['lastProcessedDate']);
+  final today = _dateOnly(DateTime.now());
+  final frequency = rule['frequency']?.toString() ?? 'Monthly';
+
+  DateTime next;
+
+  if (lastProcessed != null) {
+    final last = _dateOnly(lastProcessed);
+
+    if (frequency == 'Weekly') {
+      next = last.add(const Duration(days: 7));
+    } else if (frequency == 'Yearly') {
+      next = DateTime(
+        last.year + 1,
+        anchor.month,
+        anchor.day,
+      );
+    } else {
+      final monthOffset =
+          (last.year - anchor.year) * 12 +
+          last.month -
+          anchor.month +
+          1;
+      next = _addMonthFromAnchor(anchor, monthOffset);
+    }
+  } else {
+    next = anchor;
+  }
+
+  // Display the next upcoming date, without changing stored data.
+  for (var i = 0; i < 1200 && next.isBefore(today); i++) {
+    if (frequency == 'Weekly') {
+      next = next.add(const Duration(days: 7));
+    } else if (frequency == 'Yearly') {
+      next = DateTime(
+        next.year + 1,
+        anchor.month,
+        anchor.day,
+      );
+    } else {
+      final monthOffset =
+          (next.year - anchor.year) * 12 +
+          next.month -
+          anchor.month +
+          1;
+      next = _addMonthFromAnchor(anchor, monthOffset);
+    }
+  }
+
+  return next;
+}
+
+String _status(Map<String, dynamic> rule) {
+  if (rule['enabled'] != true) return 'Paused';
+
+  final end = _parseDate(rule['endDate']);
+  final next = _nextOccurrence(rule);
+
+  if (end != null && _dateOnly(next).isAfter(_dateOnly(end))) {
+    return 'Completed';
+  }
+
+  return 'Active';
+}
+
+
   @override
   Widget build(BuildContext context) {
     final primary = AppColors.primaryFor(context);
@@ -324,14 +415,47 @@ class _RecurringTransactionsScreenState
                                     ),
                                   ),
                                   const SizedBox(height: 6),
-                                  Text(
-                                    'Starts: ${_formatDate(rule['startDate'])}',
-                                    style: TextStyle(color: secondary),
-                                  ),
-                                  Text(
-                                    'Ends: ${rule['endDate'] == null ? 'Never' : _formatDate(rule['endDate'])}',
-                                    style: TextStyle(color: secondary),
-                                  ),
+                                  
+Text(
+  'Starts: ${_formatDate(rule['startDate'])}',
+  style: TextStyle(color: secondary),
+),
+const SizedBox(height: 4),
+Text(
+  'Next occurrence: ${_formatDate(_nextOccurrence(rule))}',
+  style: TextStyle(color: secondary),
+),
+const SizedBox(height: 4),
+Text(
+  'Last processed: ${rule['lastProcessedDate'] == null ? 'Never' : _formatDate(rule['lastProcessedDate'])}',
+  style: TextStyle(color: secondary),
+),
+const SizedBox(height: 4),
+Text(
+  'Ends: ${rule['endDate'] == null ? 'Never' : _formatDate(rule['endDate'])}',
+  style: TextStyle(color: secondary),
+),
+const SizedBox(height: 8),
+Row(
+  children: [
+    const Text(
+      'Status: ',
+      style: TextStyle(fontWeight: FontWeight.w500),
+    ),
+    Text(
+      _status(rule),
+      style: TextStyle(
+        color: _status(rule) == 'Active'
+            ? const Color(0xFF23865A)
+            : _status(rule) == 'Paused'
+                ? Colors.orange
+                : secondary,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  ],
+),
+
                                   SwitchListTile(
                                     contentPadding: EdgeInsets.zero,
                                     title: Text(

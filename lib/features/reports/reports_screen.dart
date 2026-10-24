@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/app_colors.dart';
-import '../transaction/transaction_storage.dart';
-import '../settings/settings_screen.dart';
+
 import '../../app.dart';
+import '../../core/theme/app_colors.dart';
+import '../settings/settings_screen.dart';
+import '../transaction/transaction_storage.dart';
+
 class ReportsScreen extends StatefulWidget {
   final Future<void> Function()? onTransactionsChanged;
 
@@ -19,60 +21,97 @@ class _ReportsScreenState extends State<ReportsScreen> {
   List<Map<String, dynamic>> _transactions = [];
   bool _isLoading = true;
 
-  DateTime _selectedMonth = DateTime.now();
+  late DateTime _startDate;
+  late DateTime _endDate;
+
+  String _selectedPreset = 'This Month';
 
   @override
   void initState() {
     super.initState();
+
+    final today = _dateOnly(DateTime.now());
+
+    _startDate = DateTime(today.year, today.month, 1);
+    _endDate = today;
+
     _loadTransactions();
   }
 
-  Future<void> _loadTransactions() async {
-    final transactions = await TransactionStorage.getTransactions();
-
-    if (!mounted) return;
-
-    setState(() {
-      _transactions = transactions;
-      _isLoading = false;
-    });
+  DateTime _dateOnly(DateTime date) {
+    return DateTime(date.year, date.month, date.day);
   }
 
-  List<Map<String, dynamic>> get _monthlyTransactions {
+  Future<void> _loadTransactions() async {
+    try {
+      final transactions = await TransactionStorage.getTransactions();
+
+      if (!mounted) return;
+
+      setState(() {
+        _transactions = transactions;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to load reports. Please try again.'),
+        ),
+      );
+    }
+  }
+
+  List<Map<String, dynamic>> get _filteredTransactions {
     return _transactions.where((transaction) {
       final date = DateTime.tryParse(
         transaction['date']?.toString() ?? '',
       );
 
-      return date != null &&
-          date.year == _selectedMonth.year &&
-          date.month == _selectedMonth.month;
+      if (date == null) return false;
+
+      final transactionDate = _dateOnly(date);
+
+      return !transactionDate.isBefore(_startDate) &&
+          !transactionDate.isAfter(_endDate);
     }).toList();
   }
 
   double _totalFor(String type) {
-    return _monthlyTransactions.fold<double>(0, (total, transaction) {
+    return _filteredTransactions.fold<double>(0, (total, transaction) {
       if (transaction['type']?.toString().toLowerCase() != type) {
         return total;
       }
 
-      return total +
-          (double.tryParse(transaction['amount'].toString()) ?? 0);
+      final rawAmount = transaction['amount'];
+      final amount = rawAmount is num
+          ? rawAmount.toDouble()
+          : double.tryParse(rawAmount?.toString() ?? '') ?? 0;
+
+      return total + amount;
     });
   }
 
   Map<String, double> get _categoryExpenses {
     final result = <String, double>{};
 
-    for (final transaction in _monthlyTransactions) {
+    for (final transaction in _filteredTransactions) {
       if (transaction['type']?.toString().toLowerCase() != 'expense') {
         continue;
       }
 
       final category =
           transaction['category']?.toString() ?? 'Other';
-      final amount =
-          double.tryParse(transaction['amount'].toString()) ?? 0;
+
+      final rawAmount = transaction['amount'];
+      final amount = rawAmount is num
+          ? rawAmount.toDouble()
+          : double.tryParse(rawAmount?.toString() ?? '') ?? 0;
 
       result[category] = (result[category] ?? 0) + amount;
     }
@@ -81,25 +120,76 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   String _formatAmount(double amount) {
-  return CurrencyProvider.of(context).formatAmount(amount);
-}
-
-  String get _monthLabel {
-    const months = [
-      'January', 'February', 'March', 'April',
-      'May', 'June', 'July', 'August',
-      'September', 'October', 'November', 'December',
-    ];
-
-    return '${months[_selectedMonth.month - 1]} ${_selectedMonth.year}';
+    return CurrencyProvider.of(context).formatAmount(amount);
   }
 
-  void _changeMonth(int difference) {
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/'
+        '${date.month.toString().padLeft(2, '0')}/'
+        '${date.year}';
+  }
+
+  String get _dateRangeLabel {
+    return '${_formatDate(_startDate)} - ${_formatDate(_endDate)}';
+  }
+
+  void _selectPreset(String preset) {
+    final today = _dateOnly(DateTime.now());
+
     setState(() {
-      _selectedMonth = DateTime(
-        _selectedMonth.year,
-        _selectedMonth.month + difference,
-      );
+      _selectedPreset = preset;
+
+      switch (preset) {
+        case 'This Month':
+          _startDate = DateTime(today.year, today.month, 1);
+          _endDate = today;
+          break;
+
+        case 'Last Month':
+          _startDate = DateTime(today.year, today.month - 1, 1);
+          _endDate = DateTime(today.year, today.month, 1)
+              .subtract(const Duration(days: 1));
+          break;
+
+        case 'This Year':
+          _startDate = DateTime(today.year, 1, 1);
+          _endDate = today;
+          break;
+      }
+    });
+  }
+
+  Future<void> _pickStartDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate,
+      firstDate: DateTime(2000),
+      lastDate: _endDate,
+      helpText: 'Select start date',
+    );
+
+    if (picked == null || !mounted) return;
+
+    setState(() {
+      _startDate = _dateOnly(picked);
+      _selectedPreset = 'Custom';
+    });
+  }
+
+  Future<void> _pickEndDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _endDate,
+      firstDate: _startDate,
+      lastDate: DateTime(2100, 12, 31),
+      helpText: 'Select end date',
+    );
+
+    if (picked == null || !mounted) return;
+
+    setState(() {
+      _endDate = _dateOnly(picked);
+      _selectedPreset = 'Custom';
     });
   }
 
@@ -112,37 +202,38 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return Scaffold(
       backgroundColor: AppColors.backgroundFor(context),
       appBar: AppBar(
-  title: const Text('Reports'),
-  backgroundColor: AppColors.backgroundFor(context),
-  elevation: 0,
-  actions: [
-    IconButton(
-      tooltip: 'Settings',
-      icon: const Icon(Icons.settings_outlined),
-     onPressed: () async {
-  await Navigator.push<void>(
-    context,
-    MaterialPageRoute(
-      builder: (_) => SettingsScreen(
-        onTransactionsCleared: () async {
-          await _loadTransactions();
-          await widget.onTransactionsChanged?.call();
-        },
+        title: const Text('Reports'),
+        backgroundColor: AppColors.backgroundFor(context),
+        elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () async {
+              await Navigator.push<void>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SettingsScreen(
+                    onTransactionsCleared: () async {
+                      await _loadTransactions();
+                      await widget.onTransactionsChanged?.call();
+                    },
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
-    ),
-  );
-},
-    ),
-  ],
-),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _loadTransactions,
               child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(20),
                 children: [
-                  _buildMonthSelector(),
+                  _buildDateRangeSection(),
                   const SizedBox(height: 20),
                   Row(
                     children: [
@@ -177,33 +268,202 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  Widget _buildMonthSelector() {
+  Widget _buildDateRangeSection() {
+    final primary = AppColors.primaryFor(context);
+    final text = AppColors.textPrimaryFor(context);
+    final secondary = AppColors.textSecondaryFor(context);
+    final surface = AppColors.surfaceFor(context);
+    final border = AppColors.borderFor(context);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceFor(context),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderFor(context)),
+        color: surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IconButton(
-            onPressed: () => _changeMonth(-1),
-            icon: const Icon(Icons.chevron_left),
-          ),
-          Expanded(
-            child: Text(
-              _monthLabel,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
+          Text(
+            'Report Period',
+            style: TextStyle(
+              color: text,
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          IconButton(
-            onPressed: () => _changeMonth(1),
-            icon: const Icon(Icons.chevron_right),
+          const SizedBox(height: 12),
+
+          // All three preset buttons remain in one row.
+          Row(
+            children: [
+              Expanded(
+                child: _buildPresetButton('This Month'),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _buildPresetButton('Last Month'),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _buildPresetButton('This Year'),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          Text(
+            'Custom date range',
+            style: TextStyle(
+              color: secondary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          Row(
+            children: [
+              Expanded(
+                child: _buildDateButton(
+                  label: 'Start date',
+                  date: _startDate,
+                  onPressed: _pickStartDate,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildDateButton(
+                  label: 'End date',
+                  date: _endDate,
+                  onPressed: _pickEndDate,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          Row(
+            children: [
+              Icon(
+                Icons.date_range_outlined,
+                size: 18,
+                color: primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _dateRangeLabel,
+                  style: TextStyle(
+                    color: text,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => _selectPreset('This Month'),
+                child: const Text('Reset'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPresetButton(String preset) {
+    final primary = AppColors.primaryFor(context);
+    final text = AppColors.textPrimaryFor(context);
+    final border = AppColors.borderFor(context);
+    final surface = AppColors.surfaceFor(context);
+
+    final isSelected = _selectedPreset == preset;
+
+    return ChoiceChip(
+      label: SizedBox(
+        width: double.infinity,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            preset,
+            maxLines: 1,
+            style: TextStyle(
+              color: isSelected ? Colors.white : text,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+      selected: isSelected,
+      showCheckmark: false,
+      selectedColor: primary,
+      backgroundColor: surface,
+      side: BorderSide(
+        color: isSelected ? primary : border,
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 2,
+        vertical: 8,
+      ),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      onSelected: (_) => _selectPreset(preset),
+    );
+  }
+
+  Widget _buildDateButton({
+    required String label,
+    required DateTime date,
+    required VoidCallback onPressed,
+  }) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: 14,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        side: BorderSide(
+          color: AppColors.borderFor(context),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: AppColors.textSecondaryFor(context),
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Row(
+            children: [
+              Icon(
+                Icons.calendar_month_outlined,
+                size: 16,
+                color: AppColors.primaryFor(context),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  _formatDate(date),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.textPrimaryFor(context),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -270,7 +530,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Monthly Balance',
+                  'Balance for Selected Period',
                   style: TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: 6),
@@ -306,6 +566,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
         const Text(
           'Income vs Expenses',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'For $_dateRangeLabel',
+          style: TextStyle(
+            color: AppColors.textSecondaryFor(context),
+            fontSize: 12,
+          ),
         ),
         const SizedBox(height: 16),
         _buildComparisonBar('Income', income, Colors.green, largest),
@@ -368,7 +636,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
           'Spending by Category',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
+        const SizedBox(height: 6),
+        Text(
+          'For $_dateRangeLabel',
+          style: TextStyle(
+            fontSize: 12,
+            color: AppColors.textSecondaryFor(context),
+          ),
+        ),
         const SizedBox(height: 16),
+
         if (categories.isEmpty)
           Container(
             width: double.infinity,
@@ -379,7 +656,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               border: Border.all(color: AppColors.borderFor(context)),
             ),
             child: const Text(
-              'No expenses recorded for this month.',
+              'No expenses recorded for this period.',
               textAlign: TextAlign.center,
             ),
           )
@@ -424,7 +701,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     '${(fraction * 100).toStringAsFixed(1)}% of expenses',
                     style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.textSecondary,
+                      color: AppColors.textSecondaryFor(context),
                     ),
                   ),
                 ],

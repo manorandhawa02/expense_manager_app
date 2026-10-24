@@ -9,31 +9,42 @@ class RecurringTransactionStorage {
   static const String _storageKey =
       'expense_manager_recurring_transactions';
 
-  static Future<List<Map<String, dynamic>>> getRecurringTransactions() async {
+  static const int _maxOccurrencesPerRun = 1200;
+
+  static Future<List<Map<String, dynamic>>>
+      getRecurringTransactions() async {
     final prefs = await SharedPreferences.getInstance();
     final savedData = prefs.getString(_storageKey);
 
-    if (savedData == null) return [];
+    if (savedData == null || savedData.isEmpty) return [];
 
-    final decoded = jsonDecode(savedData);
+    try {
+      final decoded = jsonDecode(savedData);
 
-    if (decoded is! List) return [];
+      if (decoded is! List) return [];
 
-    return decoded.map((item) {
-      return Map<String, dynamic>.from(item as Map);
-    }).toList();
+      return decoded
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    } on FormatException {
+      return [];
+    } on TypeError {
+      return [];
+    }
   }
 
   static Future<void> addRecurringTransaction(
     Map<String, dynamic> recurring,
   ) async {
     final rules = await getRecurringTransactions();
+    final now = DateTime.now();
 
     final rule = <String, dynamic>{
       ...recurring,
-      'id': DateTime.now().microsecondsSinceEpoch.toString(),
+      'id': now.microsecondsSinceEpoch.toString(),
       'enabled': recurring['enabled'] ?? true,
-      'createdAt': DateTime.now().toIso8601String(),
+      'createdAt': now.toIso8601String(),
       'lastProcessedDate': null,
     };
 
@@ -55,10 +66,23 @@ class RecurringTransactionStorage {
 
     if (index == -1) return false;
 
+    final oldRule = rules[index];
+
+    final scheduleChanged =
+        _dateOnly(_parseDate(oldRule['startDate']) ?? DateTime(2000))
+                .toIso8601String() !=
+            (_parseDate(updated['startDate']) == null
+                ? ''
+                : _dateOnly(_parseDate(updated['startDate'])!)
+                    .toIso8601String()) ||
+        oldRule['frequency'] != updated['frequency'];
+
     rules[index] = {
-      ...rules[index],
+      ...oldRule,
       ...updated,
       'id': id,
+      // Reset progress if the schedule itself changes.
+      if (scheduleChanged) 'lastProcessedDate': null,
     };
 
     await _save(rules);
@@ -89,94 +113,123 @@ class RecurringTransactionStorage {
     await _save(rules);
   }
 
-  /// Creates due transactions and records the processed date.
+  /// Creates due transactions when this method is called.
   ///
-  /// Reprocessing the same scheduled date will not create a duplicate.
+  /// A newly created rule starts processing from its start date,
+  /// but never creates occurrences dated before today.
+  /// Existing transaction markers prevent normal repeat processing.
   static Future<int> processDueTransactions() async {
     final rules = await getRecurringTransactions();
     final today = _dateOnly(DateTime.now());
+
     var createdCount = 0;
     var changed = false;
+
+    // Read transactions once before processing the rules.
+    final existingTransactions =
+        await TransactionStorage.getTransactions();
 
     for (var i = 0; i < rules.length; i++) {
       final rule = rules[i];
 
       if (rule['enabled'] != true) continue;
 
-      final start = DateTime.tryParse(
-        rule['startDate']?.toString() ?? '',
-      );
+      final start = _parseDate(rule['startDate']);
       if (start == null) continue;
 
-      final endValue = rule['endDate']?.toString();
-      final end = endValue == null || endValue.isEmpty
-          ? null
-          : DateTime.tryParse(endValue);
+      final startDate = _dateOnly(start);
+      final end = _parseDate(rule['endDate']);
+      final endDate = end == null ? null : _dateOnly(end);
 
-      var due = _dateOnly(start);
-      final lastProcessedValue =
-          rule['lastProcessedDate']?.toString();
+      if (endDate != null && endDate.isBefore(startDate)) {
+        rule['enabled'] = false;
+        changed = true;
+        rules[i] = rule;
+        continue;
+      }
 
-      if (lastProcessedValue != null &&
-          lastProcessedValue.isNotEmpty) {
-        final lastProcessed = DateTime.tryParse(lastProcessedValue);
+      // If the rule has not yet started, do nothing.
+      if (startDate.isAfter(today)) continue;
 
-        if (lastProcessed != null) {
-          final lastDate = _dateOnly(lastProcessed);
-          if (!lastDate.isBefore(today)) continue;
+      var lastProcessed = _parseDate(rule['lastProcessedDate']);
 
-          due = _nextDate(
-            lastDate,
-            rule['frequency']?.toString() ?? 'Monthly',
-          );
-        }
+      // Start from today for a new rule to avoid backfilling years
+      // of historical transactions.
+      DateTime due;
+
+      if (lastProcessed == null) {
+        due = _firstOccurrenceOnOrAfter(
+          startDate,
+          today,
+          rule['frequency']?.toString() ?? 'Monthly',
+        );
+      } else {
+        final lastDate = _dateOnly(lastProcessed);
+
+        // Do not process the same or an earlier day again.
+        if (!lastDate.isBefore(today)) continue;
+
+        due = _nextOccurrence(
+          startDate,
+          lastDate,
+          rule['frequency']?.toString() ?? 'Monthly',
+        );
       }
 
       var iterations = 0;
 
       while (!due.isAfter(today) &&
-          (end == null || !due.isAfter(_dateOnly(end))) &&
-          iterations < 1200) {
+          (endDate == null || !due.isAfter(endDate)) &&
+          iterations < _maxOccurrencesPerRun) {
         final dueKey = due.toIso8601String();
+        final ruleId = rule['id']?.toString();
 
-        // A unique marker on each rule prevents duplicate creation
-        // when this same scheduled date is processed again.
-        final transaction = <String, dynamic>{
-          'title': rule['title']?.toString() ?? 'Recurring transaction',
-          'category': rule['category']?.toString() ?? 'Other',
-          'date': dueKey,
-          'amount': rule['amount'] is num
-              ? (rule['amount'] as num).toDouble()
-              : double.tryParse(rule['amount']?.toString() ?? '') ?? 0.0,
-          'type': rule['type']?.toString() ?? 'Expense',
-          'paymentMethod': rule['paymentMethod']?.toString() ?? 'Cash',
-          'notes': rule['notes']?.toString() ?? '',
-          'recurringRuleId': rule['id']?.toString(),
-          'recurringDueDate': dueKey,
-        };
-
-        final existing = await TransactionStorage.getTransactions();
-
-        final alreadyCreated = existing.any((item) =>
-            item['recurringRuleId']?.toString() ==
-                rule['id']?.toString() &&
-            item['recurringDueDate']?.toString() == dueKey);
+        final alreadyCreated = existingTransactions.any((transaction) =>
+            transaction['recurringRuleId']?.toString() == ruleId &&
+            transaction['recurringDueDate']?.toString() == dueKey);
 
         if (!alreadyCreated) {
-          await TransactionStorage.addTransaction(transaction);
-          createdCount++;
+          final rawAmount = rule['amount'];
+          final amount = rawAmount is num
+              ? rawAmount.toDouble()
+              : double.tryParse(rawAmount?.toString() ?? '') ?? 0.0;
+
+          if (amount > 0 && amount.isFinite) {
+            final transaction = <String, dynamic>{
+              'title':
+                  rule['title']?.toString() ?? 'Recurring transaction',
+              'category': rule['category']?.toString() ?? 'Other',
+              'date': dueKey,
+              'amount': amount,
+              'type': rule['type']?.toString() ?? 'Expense',
+              'paymentMethod':
+                  rule['paymentMethod']?.toString() ?? 'Cash',
+              'notes': rule['notes']?.toString() ?? '',
+              'recurringRuleId': ruleId,
+              'recurringDueDate': dueKey,
+            };
+
+            await TransactionStorage.addTransaction(transaction);
+
+            // Track newly created markers during this run too.
+            existingTransactions.add(transaction);
+            createdCount++;
+          }
         }
 
         rule['lastProcessedDate'] = dueKey;
         changed = true;
-        due = _nextDate(
+
+        due = _nextOccurrence(
+          startDate,
           due,
           rule['frequency']?.toString() ?? 'Monthly',
         );
+
         iterations++;
       }
 
-      if (end != null && due.isAfter(_dateOnly(end))) {
+      if (endDate != null && due.isAfter(endDate)) {
         rule['enabled'] = false;
         changed = true;
       }
@@ -191,31 +244,82 @@ class RecurringTransactionStorage {
     return createdCount;
   }
 
+  static DateTime _firstOccurrenceOnOrAfter(
+    DateTime start,
+    DateTime target,
+    String frequency,
+  ) {
+    final startDate = _dateOnly(start);
+    final targetDate = _dateOnly(target);
+
+    if (!startDate.isBefore(targetDate)) return startDate;
+
+    var occurrence = startDate;
+    var iterations = 0;
+
+    while (occurrence.isBefore(targetDate) &&
+        iterations < _maxOccurrencesPerRun) {
+      occurrence = _nextOccurrence(startDate, occurrence, frequency);
+      iterations++;
+    }
+
+    return occurrence;
+  }
+
+  /// Computes each occurrence from the original start date.
+  /// This prevents Jan 31 -> Feb 28 -> Mar 28 date drift.
+  static DateTime _nextOccurrence(
+    DateTime originalStart,
+    DateTime currentOccurrence,
+    String frequency,
+  ) {
+    switch (frequency) {
+      case 'Weekly':
+        return currentOccurrence.add(const Duration(days: 7));
+
+      case 'Yearly':
+        return _dateInMonth(
+          originalStart.year + _yearOffset(originalStart, currentOccurrence) + 1,
+          originalStart.month,
+          originalStart.day,
+        );
+
+      case 'Monthly':
+      default:
+        final monthDifference =
+            (currentOccurrence.year - originalStart.year) * 12 +
+            currentOccurrence.month -
+            originalStart.month;
+
+        return _dateInMonth(
+          originalStart.year +
+              (originalStart.month - 1 + monthDifference + 1) ~/ 12,
+          (originalStart.month - 1 + monthDifference + 1) % 12 + 1,
+          originalStart.day,
+        );
+    }
+  }
+
+  static int _yearOffset(DateTime start, DateTime current) {
+    return current.year - start.year;
+  }
+
+  static DateTime _dateInMonth(int year, int month, int desiredDay) {
+    final lastDay = DateTime(year, month + 1, 0).day;
+    return DateTime(
+      year,
+      month,
+      desiredDay > lastDay ? lastDay : desiredDay,
+    );
+  }
+
   static DateTime _dateOnly(DateTime date) {
     return DateTime(date.year, date.month, date.day);
   }
 
-  static DateTime _nextDate(DateTime date, String frequency) {
-    switch (frequency) {
-      case 'Weekly':
-        return date.add(const Duration(days: 7));
-      case 'Yearly':
-        return _addMonths(date, 12);
-      case 'Monthly':
-      default:
-        return _addMonths(date, 1);
-    }
-  }
-
-  static DateTime _addMonths(DateTime date, int months) {
-    final totalMonths = date.year * 12 + date.month - 1 + months;
-    final year = totalMonths ~/ 12;
-    final month = totalMonths % 12 + 1;
-
-    final lastDay = DateTime(year, month + 1, 0).day;
-    final day = date.day > lastDay ? lastDay : date.day;
-
-    return DateTime(year, month, day);
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    return DateTime.tryParse(value.toString());
   }
 
   static Future<void> _save(

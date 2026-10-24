@@ -7,6 +7,7 @@ import '../features/transaction/transaction_storage.dart';
 import '../widgets/bottom_navigation.dart';
 import 'theme/app_colors.dart';
 import '../features/reports/reports_screen.dart';
+import '../features/transaction/recurring_transaction_storage.dart';
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
@@ -24,6 +25,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   final GlobalKey<TransactionsScreenState> _transactionsKey =
       GlobalKey<TransactionsScreenState>();
+      @override
+void initState() {
+  super.initState();
+  _processRecurringTransactions();
+}
 
   List<Widget> get _screens => [
   HomeScreen(
@@ -51,6 +57,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     ]);
   }
 
+  Future<void> _processRecurringTransactions() async {
+  try {
+    final createdCount =
+        await RecurringTransactionStorage.processDueTransactions();
+
+    if (!mounted) return;
+
+    if (createdCount > 0) {
+      await _refreshScreens();
+    }
+  } catch (error) {
+    debugPrint('Recurring transaction processing failed: $error');
+  }
+}
   Future<void> _openAddTransaction() async {
     final transaction = await Navigator.push<Map<String, dynamic>>(
       context,
@@ -157,11 +177,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   if (index == 0) {
     _homeKey.currentState?.loadTransactions();
+    _processRecurringTransactions();
   } else if (index == 1) {
     _transactionsKey.currentState?.loadTransactions();
+    _processRecurringTransactions();
   } else if (index == 2) {
     _groupsKey.currentState?.loadGroups();
   }
+
 }
 
   @override

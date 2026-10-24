@@ -19,20 +19,85 @@ class TransactionsScreen extends StatefulWidget {
 }
 
 class TransactionsScreenState extends State<TransactionsScreen> {
-  String _selectedFilter = 'All';
+  
+String _selectedFilter = 'All';
+String _searchQuery = '';
+String _sortBy = 'Newest first';
 
-  List<Map<String, dynamic>> _transactions = [];
-  bool _isLoading = true;
+final TextEditingController _searchController =
+    TextEditingController();
 
-  List<Map<String, dynamic>> get _filteredTransactions {
-    if (_selectedFilter == 'All') {
-      return _transactions;
-    }
+List<Map<String, dynamic>> _transactions = [];
+bool _isLoading = true;
 
-    return _transactions.where((transaction) {
-      return transaction['type'] == _selectedFilter;
-    }).toList();
+
+@override
+void dispose() {
+  _searchController.dispose();
+  super.dispose();
+}
+
+  
+List<Map<String, dynamic>> get _filteredTransactions {
+  final query = _searchQuery.trim().toLowerCase();
+
+  final results = _transactions.where((transaction) {
+    final matchesType = _selectedFilter == 'All' ||
+        transaction['type'] == _selectedFilter;
+
+    final title = transaction['title']?.toString() ?? '';
+    final category = transaction['category']?.toString() ?? '';
+    final notes = transaction['notes']?.toString() ?? '';
+
+    final matchesSearch = query.isEmpty ||
+        title.toLowerCase().contains(query) ||
+        category.toLowerCase().contains(query) ||
+        notes.toLowerCase().contains(query);
+
+    return matchesType && matchesSearch;
+  }).toList();
+
+  int compareDates(
+    Map<String, dynamic> a,
+    Map<String, dynamic> b,
+  ) {
+    final dateA = DateTime.tryParse(a['date']?.toString() ?? '') ??
+        DateTime(2000);
+    final dateB = DateTime.tryParse(b['date']?.toString() ?? '') ??
+        DateTime(2000);
+
+    return dateA.compareTo(dateB);
   }
+
+  double amountOf(Map<String, dynamic> transaction) {
+    final amount = transaction['amount'];
+    return amount is num ? amount.toDouble() : 0;
+  }
+
+  switch (_sortBy) {
+    case 'Oldest first':
+      results.sort(compareDates);
+      break;
+    case 'Highest amount':
+      results.sort(
+        (a, b) => amountOf(b).compareTo(amountOf(a)),
+      );
+      break;
+    case 'Lowest amount':
+      results.sort(
+        (a, b) => amountOf(a).compareTo(amountOf(b)),
+      );
+      break;
+    case 'Newest first':
+    default:
+      results.sort(
+        (a, b) => compareDates(b, a),
+      );
+  }
+
+  return results;
+}
+
 
  Future<void> _openRecurringTransactions() async {
   await Navigator.push<void>(
@@ -413,6 +478,103 @@ class TransactionsScreenState extends State<TransactionsScreen> {
                 ),
                 const SizedBox(height: 14),
 
+                
+TextField(
+  controller: _searchController,
+  onChanged: (value) {
+    setState(() {
+      _searchQuery = value;
+    });
+  },
+  style: TextStyle(color: textColor),
+  decoration: InputDecoration(
+    hintText: 'Search title, category, or notes...',
+    hintStyle: TextStyle(color: secondaryColor),
+    prefixIcon: Icon(Icons.search, color: secondaryColor),
+    suffixIcon: _searchQuery.isNotEmpty
+        ? IconButton(
+            tooltip: 'Clear search',
+            icon: const Icon(Icons.close),
+            onPressed: () {
+              _searchController.clear();
+              setState(() {
+                _searchQuery = '';
+              });
+            },
+          )
+        : null,
+    filled: true,
+    fillColor: surfaceColor,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: borderColor),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: borderColor),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: primaryColor, width: 1.5),
+    ),
+  ),
+),
+const SizedBox(height: 14),
+
+
+Row(
+  children: [
+    Icon(
+      Icons.sort,
+      color: secondaryColor,
+      size: 20,
+    ),
+    const SizedBox(width: 8),
+    Text(
+      'Sort by',
+      style: TextStyle(color: secondaryColor),
+    ),
+    const Spacer(),
+    DropdownButton<String>(
+      value: _sortBy,
+      dropdownColor: surfaceColor,
+      underline: const SizedBox.shrink(),
+      style: TextStyle(
+        color: textColor,
+        fontSize: 13,
+      ),
+      items: const [
+        DropdownMenuItem(
+          value: 'Newest first',
+          child: Text('Newest first'),
+        ),
+        DropdownMenuItem(
+          value: 'Oldest first',
+          child: Text('Oldest first'),
+        ),
+        DropdownMenuItem(
+          value: 'Highest amount',
+          child: Text('Highest amount'),
+        ),
+        DropdownMenuItem(
+          value: 'Lowest amount',
+          child: Text('Lowest amount'),
+        ),
+      ],
+      onChanged: (value) {
+        if (value == null) return;
+
+        setState(() {
+          _sortBy = value;
+        });
+      },
+    ),
+  ],
+),
+const SizedBox(height: 14),
+
+
+
                 // Filters
                 Row(
                   children: ['All', 'Expense', 'Income'].map((filter) {
@@ -472,7 +634,9 @@ class TransactionsScreenState extends State<TransactionsScreen> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'No transactions yet',
+                            _searchQuery.isNotEmpty
+    ? 'No matching transactions'
+    : 'No transactions yet',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -481,7 +645,9 @@ class TransactionsScreenState extends State<TransactionsScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Tap + to add your first transaction.',
+                            _searchQuery.isNotEmpty
+    ? 'Try another title, category, or keyword.'
+    : 'Tap + to add your first transaction.',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: secondaryColor),
                           ),
