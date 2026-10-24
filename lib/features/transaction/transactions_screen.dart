@@ -3,7 +3,7 @@ import '../../app.dart';
 import '../../core/theme/app_colors.dart';
 import 'add_expense_screen.dart';
 import 'transaction_storage.dart';
-
+import 'recurring_transactions_screen.dart';
 class TransactionsScreen extends StatefulWidget {
   final Future<void> Function(Map<String, dynamic> transaction)? onEdit;
   final Future<void> Function(Map<String, dynamic> transaction)? onDelete;
@@ -33,6 +33,19 @@ class TransactionsScreenState extends State<TransactionsScreen> {
       return transaction['type'] == _selectedFilter;
     }).toList();
   }
+
+ Future<void> _openRecurringTransactions() async {
+  await Navigator.push<void>(
+    context,
+    MaterialPageRoute<void>(
+      builder: (_) => const RecurringTransactionsScreen(),
+    ),
+  );
+
+  if (!mounted) return;
+
+  await loadTransactions();
+}
 
   @override
   void initState() {
@@ -64,6 +77,7 @@ class TransactionsScreenState extends State<TransactionsScreen> {
       );
     }
   }
+
 
   double _totalFor(String type) {
     return _filteredTransactions
@@ -291,22 +305,40 @@ class TransactionsScreenState extends State<TransactionsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Transactions',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: primaryColor,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Track your income and expenses',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: secondaryColor,
-                  ),
-                ),
+                Row(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Transactions',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              color: primaryColor,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Track your income and expenses',
+            style: TextStyle(
+              fontSize: 14,
+              color: secondaryColor,
+            ),
+          ),
+        ],
+      ),
+    ),
+    IconButton(
+      tooltip: 'Recurring transactions',
+      onPressed: _openRecurringTransactions,
+      icon: const Icon(Icons.event_repeat_outlined),
+      color: primaryColor,
+    ),
+  ],
+),
                 const SizedBox(height: 24),
 
                 // Summary card
