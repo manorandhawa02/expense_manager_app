@@ -4,12 +4,13 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
-
+import '../../core/notifications/notification_service.dart';
 import '../../app.dart';
 import '../../core/theme/app_colors.dart';
 import '../transaction/transaction_storage.dart';
 import 'backup_service.dart';
 import 'profile_storage.dart';
+
 
 class SettingsScreen extends StatefulWidget {
   final Future<void> Function()? onTransactionsCleared;
@@ -27,8 +28,157 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadProfileName();
+    _loadReminderSettings();
   }
 
+
+  
+bool _dailyReminderEnabled = false;
+TimeOfDay _reminderTime = const TimeOfDay(hour: 21, minute: 0);
+bool _reminderSettingsLoaded = false;
+
+
+Future<void> _loadReminderSettings() async {
+  final service = NotificationService.instance;
+
+  final enabled = await service.isDailyReminderEnabled();
+  final hour = await service.getReminderHour();
+  final minute = await service.getReminderMinute();
+
+  if (!mounted) return;
+
+  setState(() {
+    _dailyReminderEnabled = enabled;
+    _reminderTime = TimeOfDay(hour: hour, minute: minute);
+    _reminderSettingsLoaded = true;
+  });
+}
+
+Future<void> _toggleDailyReminder(bool enabled) async {
+  try {
+    if (enabled) {
+      final granted =
+          await NotificationService.instance.requestPermission();
+
+      if (!mounted) return;
+
+      if (!granted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please allow notifications in your device settings.'),
+          ),
+        );
+        return;
+      }
+
+      await NotificationService.instance.scheduleDailyReminder(
+        hour: _reminderTime.hour,
+        minute: _reminderTime.minute,
+      );
+    } else {
+      await NotificationService.instance.cancelDailyReminder();
+    }
+
+    if (!mounted) return;
+
+    setState(() => _dailyReminderEnabled = enabled);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          enabled
+              ? 'Daily reminder enabled.'
+              : 'Daily reminder disabled.',
+        ),
+      ),
+    );
+  } catch (error) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Could not update reminder: $error')),
+    );
+  }
+}
+
+Future<void> _selectReminderTime() async {
+  final selectedTime = await showTimePicker(
+    context: context,
+    initialTime: _reminderTime,
+  );
+
+  if (selectedTime == null || !mounted) return;
+
+  try {
+    if (_dailyReminderEnabled) {
+      await NotificationService.instance.scheduleDailyReminder(
+        hour: selectedTime.hour,
+        minute: selectedTime.minute,
+      );
+    }
+
+    if (!mounted) return;
+
+    setState(() => _reminderTime = selectedTime);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Reminder time set to ${selectedTime.format(context)}.',
+        ),
+      ),
+    );
+  } catch (error) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Could not update reminder time: $error')),
+    );
+  }
+}
+
+
+  Future<void> _testNotification() async {
+  try {
+    final granted =
+        await NotificationService.instance.requestPermission();
+
+    if (!mounted) return;
+
+    if (!granted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Notification permission was not granted. '
+            'Check your device settings.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    await NotificationService.instance.showTestNotification();
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Test notification sent.'),
+      ),
+    );
+  } catch (error, stackTrace) {
+    debugPrint('Notification test failed: $error');
+    debugPrintStack(stackTrace: stackTrace);
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Notification test failed: $error'),
+      ),
+    );
+  }
+}
   // --------------------------------------------------
   // BACKUP AND EXPORT
   // --------------------------------------------------
@@ -243,6 +393,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: AppColors.backgroundFor(context),
         elevation: 0,
       ),
+      
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -274,6 +425,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () => _showCurrencyDialog(context),
             ),
           ]),
+
+          const SizedBox(height: 24),
+
+_buildSectionTitle(context, 'Notifications'),
+const SizedBox(height: 12),
+
+_buildSettingsCard(context, [
+  _buildSettingsTile(
+    context: context,
+    icon: Icons.notifications_active_outlined,
+    title: 'Test Notification',
+    subtitle: 'Check that notifications work on this device',
+    onTap: _testNotification,
+  ),
+]),
+
+
+
+const SizedBox(height: 24),
+
+_buildSectionTitle(context, 'Notifications'),
+const SizedBox(height: 12),
+
+_buildSettingsCard(context, [
+  SwitchListTile(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+    secondary: const Icon(Icons.notifications_active_outlined),
+    title: const Text('Daily expense reminder'),
+    subtitle: Text(
+      _reminderSettingsLoaded
+          ? 'Remind me daily at ${_reminderTime.format(context)}'
+          : 'Loading reminder settings...',
+    ),
+    value: _dailyReminderEnabled,
+    onChanged: _reminderSettingsLoaded
+        ? _toggleDailyReminder
+        : null,
+  ),
+  ListTile(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+    leading: const Icon(Icons.access_time),
+    title: const Text('Reminder time'),
+    subtitle: Text(_reminderTime.format(context)),
+    trailing: const Icon(Icons.chevron_right),
+    enabled: _reminderSettingsLoaded,
+    onTap: _reminderSettingsLoaded ? _selectReminderTime : null,
+  ),
+]),
 
           const SizedBox(height: 24),
 

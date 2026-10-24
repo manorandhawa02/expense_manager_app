@@ -1,5 +1,9 @@
-import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'dart:io';
 
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:flutter/material.dart';
 import '../../app.dart';
 import '../../core/theme/app_colors.dart';
 import '../settings/settings_screen.dart';
@@ -66,6 +70,101 @@ class _ReportsScreenState extends State<ReportsScreen> {
       );
     }
   }
+
+  String _csvEscape(Object? value) {
+  final text = value?.toString() ?? '';
+
+  // Escape double quotes and protect commas/newlines.
+  return '"${text.replaceAll('"', '""')}"';
+}
+
+Future<void> _exportReport() async {
+  final transactions = _filteredTransactions;
+
+  if (transactions.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'No transactions available for this date range to export.',
+        ),
+      ),
+    );
+    return;
+  }
+
+  try {
+    final rows = <List<String>>[
+      [
+        'Date',
+        'Title',
+        'Type',
+        'Category',
+        'Amount',
+        'Notes',
+      ],
+    ];
+
+    for (final transaction in transactions) {
+      final parsedDate = DateTime.tryParse(
+        transaction['date']?.toString() ?? '',
+      );
+
+      final amountValue = transaction['amount'];
+      final amount = amountValue is num
+          ? amountValue.toString()
+          : double.tryParse(amountValue?.toString() ?? '')?.toString() ?? '0';
+
+      rows.add([
+        parsedDate == null ? '' : _formatDate(parsedDate),
+        transaction['title']?.toString() ?? '',
+        transaction['type']?.toString() ?? '',
+        transaction['category']?.toString() ?? '',
+        amount,
+        transaction['notes']?.toString() ?? '',
+      ]);
+    }
+
+    final csvContent = rows
+        .map((row) => row.map(_csvEscape).join(','))
+        .join('\r\n');
+
+    // BOM helps spreadsheet applications recognize UTF-8 text.
+    final csvBytes = utf8.encode('\uFEFF$csvContent');
+
+    final directory = await getTemporaryDirectory();
+    final fileName =
+        'expense_report_${_startDate.year}_'
+        '${_startDate.month.toString().padLeft(2, '0')}_'
+        '${_startDate.day.toString().padLeft(2, '0')}.csv';
+
+    final file = File('${directory.path}/$fileName');
+    await file.writeAsBytes(csvBytes, flush: true);
+
+    if (!mounted) return;
+
+    await SharePlus.instance.share(
+      ShareParams(
+        title: 'Expense Report',
+        subject: 'Expense Report - $_dateRangeLabel',
+        text: 'Expense report for $_dateRangeLabel',
+        files: [
+          XFile(
+            file.path,
+            mimeType: 'text/csv',
+          ),
+        ],
+      ),
+    );
+  } catch (error) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Unable to export report: $error'),
+      ),
+    );
+  }
+}
 
   List<Map<String, dynamic>> get _filteredTransactions {
     return _transactions.where((transaction) {
@@ -206,24 +305,29 @@ class _ReportsScreenState extends State<ReportsScreen> {
         backgroundColor: AppColors.backgroundFor(context),
         elevation: 0,
         actions: [
-          IconButton(
-            tooltip: 'Settings',
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () async {
-              await Navigator.push<void>(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => SettingsScreen(
-                    onTransactionsCleared: () async {
-                      await _loadTransactions();
-                      await widget.onTransactionsChanged?.call();
-                    },
-                  ),
-                ),
-              );
+  IconButton(
+    tooltip: 'Export report to CSV',
+    icon: const Icon(Icons.ios_share_rounded),
+    onPressed: _isLoading ? null : _exportReport,
+  ),
+  IconButton(
+    tooltip: 'Settings',
+    icon: const Icon(Icons.settings_outlined),
+    onPressed: () async {
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SettingsScreen(
+            onTransactionsCleared: () async {
+              await _loadTransactions();
+              await widget.onTransactionsChanged?.call();
             },
           ),
-        ],
+        ),
+      );
+    },
+  ),
+],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

@@ -1,6 +1,10 @@
+
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../budgets/budget_alert_service.dart';
 
 class TransactionStorage {
   static const String _storageKey = 'expense_manager_transactions';
@@ -33,6 +37,23 @@ class TransactionStorage {
     transactions.insert(0, newTransaction);
 
     await _saveTransactions(transactions);
+    await _checkBudgetAlertsSafely(transactions);
+  }
+
+  // Check budget alerts without interrupting transaction operations.
+  static Future<void> _checkBudgetAlertsSafely(
+    List<Map<String, dynamic>> transactions,
+  ) async {
+    try {
+      await BudgetAlertService.checkBudgets(transactions);
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        print('Budget alert check failed: $error');
+      }
+      if (kDebugMode) {
+        print(stackTrace);
+      }
+    }
   }
 
   // Update an existing transaction without changing its ID.
@@ -58,13 +79,14 @@ class TransactionStorage {
     };
 
     await _saveTransactions(transactions);
+    await _checkBudgetAlertsSafely(transactions);
+
     return true;
   }
 
   // Delete a transaction using its unique ID.
   static Future<bool> deleteTransaction(String id) async {
     final transactions = await getTransactions();
-
     final originalLength = transactions.length;
 
     transactions.removeWhere(
@@ -76,6 +98,8 @@ class TransactionStorage {
     }
 
     await _saveTransactions(transactions);
+    await _checkBudgetAlertsSafely(transactions);
+
     return true;
   }
 
