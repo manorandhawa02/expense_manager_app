@@ -314,7 +314,7 @@ class TransactionsScreenState extends State<TransactionsScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: primaryColor,
+                    color: AppColors.primary,
                     borderRadius: BorderRadius.circular(22),
                   ),
                   child: Column(
