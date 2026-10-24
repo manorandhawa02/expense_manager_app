@@ -1,15 +1,20 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
+
 import '../../app.dart';
 import '../../core/theme/app_colors.dart';
 import '../transaction/transaction_storage.dart';
+import 'backup_service.dart';
 import 'profile_storage.dart';
+
 class SettingsScreen extends StatefulWidget {
   final Future<void> Function()? onTransactionsCleared;
 
-  const SettingsScreen({
-    super.key,
-    this.onTransactionsCleared,
-  });
+  const SettingsScreen({super.key, this.onTransactionsCleared});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -24,14 +29,136 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadProfileName();
   }
 
+  // --------------------------------------------------
+  // BACKUP AND EXPORT
+  // --------------------------------------------------
+
+  Future<void> _exportBackup() async {
+    try {
+      final file = await BackupService.exportBackup();
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          subject: 'Expense Manager Backup',
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Backup export failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Backup export failed: $error')));
+    }
+  }
+
+  Future<void> _exportCsv() async {
+    try {
+      final file = await BackupService.exportTransactionsCsv();
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          subject: 'Expense Manager Transactions',
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('CSV export failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('CSV export failed: $error')));
+    }
+  }
+
+  Future<void> _restoreBackup() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Restore backup?'),
+        content: const Text(
+          'Restoring replaces the saved data covered by the backup. '
+          'Export your current data first to keep a copy.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      // Your installed file_picker version returns a List<PlatformFile>.
+      final List<PlatformFile> files =
+          await FilePicker.pickFiles(
+            type: FileType.custom,
+            allowedExtensions: ['json'],
+          );
+
+      if (files.isEmpty) return;
+
+      final selected = files.first;
+
+      final String content;
+
+      if (selected.path != null) {
+        content = await File(selected.path!).readAsString(encoding: utf8);
+      } else {
+        throw const FormatException('Unable to read the selected backup file.');
+      }
+
+      await BackupService.restoreBackup(content);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Backup restored successfully. Reopen the app '
+            'if some screens do not refresh automatically.',
+          ),
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Backup restore failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Restore failed: $error')));
+    }
+  }
+
+  // --------------------------------------------------
+  // PROFILE
+  // --------------------------------------------------
+
   Future<void> _loadProfileName() async {
-    final name = await ProfileStorage.getName();
+    try {
+      final name = await ProfileStorage.getName();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _profileName = name;
-    });
+      setState(() {
+        _profileName = name;
+      });
+    } catch (error) {
+      debugPrint('Profile loading failed: $error');
+    }
   }
 
   Future<void> _editProfileName() async {
@@ -46,9 +173,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           autofocus: true,
           textCapitalization: TextCapitalization.words,
           maxLength: 40,
-          decoration: const InputDecoration(
-            hintText: 'Enter your name',
-          ),
+          decoration: const InputDecoration(hintText: 'Enter your name'),
           onSubmitted: (value) {
             if (value.trim().isNotEmpty) {
               Navigator.pop(dialogContext, value.trim());
@@ -57,7 +182,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+            },
             child: const Text('Cancel'),
           ),
           ElevatedButton(
@@ -74,39 +201,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     controller.dispose();
 
-    if (name == null || name.trim().isEmpty || !mounted) return;
+    if (name == null || name.trim().isEmpty || !mounted) {
+      return;
+    }
 
     try {
-  await ProfileStorage.saveName(name);
+      await ProfileStorage.saveName(name);
 
-  final savedName = await ProfileStorage.getName();
+      final savedName = await ProfileStorage.getName();
 
-  debugPrint('Name saved: $savedName');
+      if (!mounted) return;
 
-  if (!mounted) return;
+      setState(() {
+        _profileName = savedName;
+      });
 
-  setState(() {
-    _profileName = savedName;
-  });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Name saved successfully.')));
+    } catch (error, stackTrace) {
+      debugPrint('Name save failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text('Name saved successfully.'),
-    ),
-  );
-} catch (error, stackTrace) {
-  debugPrint('NAME SAVE ERROR: $error');
-  debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
 
-  if (!mounted) return;
-
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text('Name save error: $error'),
-    ),
-  );
-}
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Name save error: $error')));
+    }
   }
+
+  // --------------------------------------------------
+  // SETTINGS SCREEN
+  // --------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -122,36 +248,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           _buildSectionTitle(context, 'Profile & display'),
           const SizedBox(height: 12),
+
           _buildSettingsCard(context, [
-  _buildSettingsTile(
-    context: context,
-    icon: Icons.person_outline,
-    title: 'Your name',
-    subtitle: _profileName,
-    onTap: _editProfileName,
-  ),
-  _buildDivider(context),
-  _buildSettingsTile(
-    context: context,
-    icon: Icons.palette_outlined,
-    title: 'Appearance',
-    subtitle: 'Customize your app theme',
-    onTap: () => _showAppearanceDialog(context),
-  ),
-  _buildDivider(context),
-  _buildSettingsTile(
-    context: context,
-    icon: Icons.currency_exchange_rounded,
-    title: 'Currency',
-    subtitle: 'Choose your preferred currency',
-    onTap: () => _showCurrencyDialog(context),
-  ),
-]),
+            _buildSettingsTile(
+              context: context,
+              icon: Icons.person_outline,
+              title: 'Your name',
+              subtitle: _profileName,
+              onTap: _editProfileName,
+            ),
+            _buildDivider(context),
+            _buildSettingsTile(
+              context: context,
+              icon: Icons.palette_outlined,
+              title: 'Appearance',
+              subtitle: 'Customize your app theme',
+              onTap: () => _showAppearanceDialog(context),
+            ),
+            _buildDivider(context),
+            _buildSettingsTile(
+              context: context,
+              icon: Icons.currency_exchange_rounded,
+              title: 'Currency',
+              subtitle: 'Choose your preferred currency',
+              onTap: () => _showCurrencyDialog(context),
+            ),
+          ]),
+
           const SizedBox(height: 24),
 
           _buildSectionTitle(context, 'Data Management'),
           const SizedBox(height: 12),
+
           _buildSettingsCard(context, [
+            _buildSettingsTile(
+              context: context,
+              icon: Icons.backup_outlined,
+              title: 'Export Backup',
+              subtitle: 'Save your app data as a JSON file',
+              onTap: _exportBackup,
+            ),
+            _buildDivider(context),
+            _buildSettingsTile(
+              context: context,
+              icon: Icons.restore_rounded,
+              title: 'Restore Backup',
+              subtitle: 'Restore data from a JSON backup',
+              onTap: _restoreBackup,
+            ),
+            _buildDivider(context),
+            _buildSettingsTile(
+              context: context,
+              icon: Icons.file_download_outlined,
+              title: 'Export Transactions',
+              subtitle: 'Export transactions to a CSV file',
+              onTap: _exportCsv,
+            ),
+            _buildDivider(context),
             _buildSettingsTile(
               context: context,
               icon: Icons.storage_rounded,
@@ -169,10 +322,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () => _confirmClearData(context),
             ),
           ]),
+
           const SizedBox(height: 24),
 
           _buildSectionTitle(context, 'About'),
           const SizedBox(height: 12),
+
           _buildSettingsCard(context, [
             _buildSettingsTile(
               context: context,
@@ -187,6 +342,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ]),
+
           const SizedBox(height: 28),
 
           Center(
@@ -203,6 +359,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // --------------------------------------------------
+  // REUSABLE SETTINGS WIDGETS
+  // --------------------------------------------------
+
   Widget _buildSectionTitle(BuildContext context, String title) {
     return Text(
       title,
@@ -214,21 +374,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildSettingsCard(
-    BuildContext context,
-    List<Widget> children,
-  ) {
+  Widget _buildSettingsCard(BuildContext context, List<Widget> children) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceFor(context),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: AppColors.borderFor(context),
-        ),
+        border: Border.all(color: AppColors.borderFor(context)),
       ),
-      child: Column(
-        children: children,
-      ),
+      child: Column(children: children),
     );
   }
 
@@ -240,14 +393,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required VoidCallback onTap,
     Color? iconColor,
   }) {
-    final effectiveIconColor =
-        iconColor ?? AppColors.primaryFor(context);
+    final effectiveIconColor = iconColor ?? AppColors.primaryFor(context);
 
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 6,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       leading: Container(
         width: 42,
         height: 42,
@@ -255,21 +404,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           color: effectiveIconColor.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(
-          icon,
-          color: effectiveIconColor,
-        ),
+        child: Icon(icon, color: effectiveIconColor),
       ),
-      title: Text(
-        title,
-        style: const TextStyle(
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
       subtitle: Text(subtitle),
-      trailing: const Icon(
-        Icons.chevron_right_rounded,
-      ),
+      trailing: const Icon(Icons.chevron_right_rounded),
       onTap: onTap,
     );
   }
@@ -282,6 +421,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       color: AppColors.borderFor(context),
     );
   }
+
+  // --------------------------------------------------
+  // LOCAL STORAGE INFORMATION
+  // --------------------------------------------------
 
   void _showStorageInfo(BuildContext context) {
     showDialog<void>(
@@ -303,53 +446,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // --------------------------------------------------
+  // CLEAR TRANSACTIONS
+  // --------------------------------------------------
+
   Future<void> _confirmClearData(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Clear personal transactions?'),
         content: const Text(
-          'This will permanently remove all personal income and '
-          'expense transactions stored on this device. Group '
-          'expenses and settlements will not be deleted.',
+          'This will permanently remove all personal income '
+          'and expense transactions stored on this device. '
+          'Group expenses and settlements will not be deleted.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
+            onPressed: () {
+              Navigator.pop(dialogContext, false);
+            },
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
+            onPressed: () {
+              Navigator.pop(dialogContext, true);
+            },
             child: const Text(
               'Clear Data',
-              style: TextStyle(
-                color: Colors.redAccent,
-              ),
+              style: TextStyle(color: Colors.redAccent),
             ),
           ),
         ],
       ),
     );
 
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
 
-    await TransactionStorage.clearTransactions();
-    await widget.onTransactionsCleared?.call();
+    try {
+      await TransactionStorage.clearTransactions();
+      await widget.onTransactionsCleared?.call();
 
-    if (!context.mounted) return;
+      if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Personal transactions cleared successfully.',
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Personal transactions cleared successfully.'),
         ),
-      ),
-    );
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not clear transactions: $error')),
+      );
+    }
   }
 
-  Future<void> _showAppearanceDialog(
-    BuildContext context,
-  ) async {
+  // --------------------------------------------------
+  // APPEARANCE
+  // --------------------------------------------------
+
+  Future<void> _showAppearanceDialog(BuildContext context) async {
     final controller = ThemeProvider.of(context);
 
     final selectedMode = await showDialog<ThemeMode>(
@@ -383,15 +542,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _themeOption(String title, ThemeMode mode) {
-    return RadioListTile<ThemeMode>(
-      title: Text(title),
-      value: mode,
-    );
+    return RadioListTile<ThemeMode>(title: Text(title), value: mode);
   }
 
-  Future<void> _showCurrencyDialog(
-    BuildContext context,
-  ) async {
+  // --------------------------------------------------
+  // CURRENCY
+  // --------------------------------------------------
+
+  Future<void> _showCurrencyDialog(BuildContext context) async {
     final controller = CurrencyProvider.of(context);
 
     final selectedCurrency = await showDialog<String>(
@@ -417,10 +575,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: Text('US Dollar (USD)'),
                   value: 'USD',
                 ),
-                RadioListTile<String>(
-                  title: Text('Euro (EUR)'),
-                  value: 'EUR',
-                ),
+                RadioListTile<String>(title: Text('Euro (EUR)'), value: 'EUR'),
                 RadioListTile<String>(
                   title: Text('British Pound (GBP)'),
                   value: 'GBP',
@@ -442,10 +597,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Currency set to $selectedCurrency.'),
-        ),
+        SnackBar(content: Text('Currency set to $selectedCurrency.')),
       );
     }
   }
+}
+
+extension on PlatformFile {
 }

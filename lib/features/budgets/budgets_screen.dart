@@ -47,8 +47,8 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
       if (!mounted) return;
 
       setState(() {
-        _budgets = results[0] as List<Map<String, dynamic>>;
-        _transactions = results[1] as List<Map<String, dynamic>>;
+        _budgets = results[0];
+        _transactions = results[1];
         _loading = false;
       });
     } catch (e, st) {
@@ -463,7 +463,7 @@ class _BudgetFormState extends State<_BudgetForm> {
     final text = AppColors.textPrimaryFor(context);
     final secondary = AppColors.textSecondaryFor(context);
     final surface = AppColors.surfaceFor(context);
-    final border = AppColors.borderFor(context);
+    AppColors.borderFor(context);
 
     return SafeArea(
       child: SingleChildScrollView(
