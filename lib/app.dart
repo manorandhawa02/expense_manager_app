@@ -3,7 +3,7 @@ import 'core/currency/currency_controller.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
 import 'features/splash/splash_screen.dart';
-
+import 'core/security/app_lock_gate.dart';
 class ThemeProvider extends InheritedNotifier<ThemeController> {
   const ThemeProvider({
     super.key,
@@ -72,13 +72,22 @@ void dispose() {
   controller: _themeController,
   child: CurrencyProvider(
     controller: _currencyController,
-    child: MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Expense Manager',
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: _themeController.themeMode,
-      home: const SplashScreen(),
+    
+child: MaterialApp(
+  debugShowCheckedModeBanner: false,
+  title: 'Expense Manager',
+  theme: AppTheme.lightTheme,
+  darkTheme: AppTheme.darkTheme,
+  themeMode: _themeController.themeMode,
+
+  builder: (context, child) {
+    return AppLockGate(
+      child: child ?? const SizedBox.shrink(),
+    );
+  },
+
+  home: const SplashScreen(),
+
     ),
   ),
 );

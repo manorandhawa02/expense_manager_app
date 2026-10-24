@@ -1,21 +1,27 @@
+
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../core/notifications/notification_service.dart';
+
 import '../../app.dart';
+import '../../core/notifications/notification_service.dart';
+import '../../core/security/app_lock_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../transaction/transaction_storage.dart';
 import 'backup_service.dart';
 import 'profile_storage.dart';
 
-
 class SettingsScreen extends StatefulWidget {
   final Future<void> Function()? onTransactionsCleared;
 
-  const SettingsScreen({super.key, this.onTransactionsCleared});
+  const SettingsScreen({
+    super.key,
+    this.onTransactionsCleared,
+  });
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -24,6 +30,10 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   String _profileName = 'Mano';
 
+  bool _dailyReminderEnabled = false;
+  TimeOfDay _reminderTime = const TimeOfDay(hour: 21, minute: 0);
+  bool _reminderSettingsLoaded = false;
+
   @override
   void initState() {
     super.initState();
@@ -31,32 +41,329 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadReminderSettings();
   }
 
+  // --------------------------------------------------
+  // APP LOCK
+  // --------------------------------------------------
 
-  
-bool _dailyReminderEnabled = false;
-TimeOfDay _reminderTime = const TimeOfDay(hour: 21, minute: 0);
-bool _reminderSettingsLoaded = false;
+  Future<void> _enableAppLock() async {
+    final pinController = TextEditingController();
+    final confirmController = TextEditingController();
 
+    try {
+      final result = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Create App Lock PIN'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: pinController,
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 6,
+                decoration: const InputDecoration(
+                  labelText: 'Create 4–6 digit PIN',
+                ),
+              ),
+              TextField(
+                controller: confirmController,
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 6,
+                decoration: const InputDecoration(
+                  labelText: 'Confirm PIN',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final pin = pinController.text;
+                final confirmation = confirmController.text;
 
-Future<void> _loadReminderSettings() async {
-  final service = NotificationService.instance;
+                if (!RegExp(r'^\d{4,6}$').hasMatch(pin)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('PIN must contain 4–6 digits.'),
+                    ),
+                  );
+                  return;
+                }
 
-  final enabled = await service.isDailyReminderEnabled();
-  final hour = await service.getReminderHour();
-  final minute = await service.getReminderMinute();
+                if (pin != confirmation) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('PINs do not match.'),
+                    ),
+                  );
+                  return;
+                }
 
-  if (!mounted) return;
+                Navigator.pop(dialogContext, true);
+              },
+              child: const Text('Save PIN'),
+            ),
+          ],
+        ),
+      );
 
-  setState(() {
-    _dailyReminderEnabled = enabled;
-    _reminderTime = TimeOfDay(hour: hour, minute: minute);
-    _reminderSettingsLoaded = true;
-  });
-}
+      if (result != true || !mounted) return;
 
-Future<void> _toggleDailyReminder(bool enabled) async {
-  try {
-    if (enabled) {
+      await AppLockService.setPin(pinController.text);
+
+      if (!mounted) return;
+
+      setState(() {});
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('App Lock enabled successfully.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not enable App Lock: $error'),
+        ),
+      );
+    } finally {
+      pinController.dispose();
+      confirmController.dispose();
+    }
+  }
+
+  Future<void> _disableAppLock() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Disable App Lock?'),
+        content: const Text(
+          'Your app will no longer require a PIN or fingerprint to open.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Disable'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await AppLockService.disable();
+
+      if (!mounted) return;
+
+      setState(() {});
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('App Lock disabled.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not disable App Lock: $error'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleBiometric(bool enabled) async {
+    try {
+      if (enabled) {
+        final auth = LocalAuthentication();
+        final canCheck = await auth.canCheckBiometrics;
+        final supported = await auth.isDeviceSupported();
+        final biometrics =
+            canCheck ? await auth.getAvailableBiometrics() : <BiometricType>[];
+
+        if (!supported || biometrics.isEmpty) {
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'No enrolled fingerprint or supported biometric is available.',
+              ),
+            ),
+          );
+          return;
+        }
+
+        // Verify that the enrolled biometric actually works before enabling it.
+        final authenticated = await auth.authenticate(
+          localizedReason: 'Verify your identity to enable fingerprint unlock',
+          biometricOnly: true,
+        );
+
+        if (!authenticated) return;
+      }
+
+      await AppLockService.setBiometricEnabled(enabled);
+
+      if (!mounted) return;
+
+      setState(() {});
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            enabled
+                ? 'Fingerprint unlock enabled.'
+                : 'Fingerprint unlock disabled.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not update fingerprint setting: $error'),
+        ),
+      );
+    }
+  }
+
+  // --------------------------------------------------
+  // DAILY REMINDER
+  // --------------------------------------------------
+
+  Future<void> _loadReminderSettings() async {
+    try {
+      final service = NotificationService.instance;
+
+      final enabled = await service.isDailyReminderEnabled();
+      final hour = await service.getReminderHour();
+      final minute = await service.getReminderMinute();
+
+      if (!mounted) return;
+
+      setState(() {
+        _dailyReminderEnabled = enabled;
+        _reminderTime = TimeOfDay(hour: hour, minute: minute);
+        _reminderSettingsLoaded = true;
+      });
+    } catch (error) {
+      debugPrint('Reminder settings loading failed: $error');
+
+      if (!mounted) return;
+
+      setState(() {
+        _reminderSettingsLoaded = true;
+      });
+    }
+  }
+
+  Future<void> _toggleDailyReminder(bool enabled) async {
+    try {
+      if (enabled) {
+        final granted =
+            await NotificationService.instance.requestPermission();
+
+        if (!mounted) return;
+
+        if (!granted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Please allow notifications in your device settings.',
+              ),
+            ),
+          );
+          return;
+        }
+
+        await NotificationService.instance.scheduleDailyReminder(
+          hour: _reminderTime.hour,
+          minute: _reminderTime.minute,
+        );
+      } else {
+        await NotificationService.instance.cancelDailyReminder();
+      }
+
+      if (!mounted) return;
+
+      setState(() => _dailyReminderEnabled = enabled);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            enabled
+                ? 'Daily reminder enabled.'
+                : 'Daily reminder disabled.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not update reminder: $error'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _selectReminderTime() async {
+    final selectedTime = await showTimePicker(
+      context: context,
+      initialTime: _reminderTime,
+    );
+
+    if (selectedTime == null || !mounted) return;
+
+    try {
+      if (_dailyReminderEnabled) {
+        await NotificationService.instance.scheduleDailyReminder(
+          hour: selectedTime.hour,
+          minute: selectedTime.minute,
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() => _reminderTime = selectedTime);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Reminder time set to ${selectedTime.format(context)}.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not update reminder time: $error'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _testNotification() async {
+    try {
       final granted =
           await NotificationService.instance.requestPermission();
 
@@ -65,120 +372,38 @@ Future<void> _toggleDailyReminder(bool enabled) async {
       if (!granted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please allow notifications in your device settings.'),
+            content: Text(
+              'Notification permission was not granted. '
+              'Check your device settings.',
+            ),
           ),
         );
         return;
       }
 
-      await NotificationService.instance.scheduleDailyReminder(
-        hour: _reminderTime.hour,
-        minute: _reminderTime.minute,
-      );
-    } else {
-      await NotificationService.instance.cancelDailyReminder();
-    }
+      await NotificationService.instance.showTestNotification();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() => _dailyReminderEnabled = enabled);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          enabled
-              ? 'Daily reminder enabled.'
-              : 'Daily reminder disabled.',
-        ),
-      ),
-    );
-  } catch (error) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Could not update reminder: $error')),
-    );
-  }
-}
-
-Future<void> _selectReminderTime() async {
-  final selectedTime = await showTimePicker(
-    context: context,
-    initialTime: _reminderTime,
-  );
-
-  if (selectedTime == null || !mounted) return;
-
-  try {
-    if (_dailyReminderEnabled) {
-      await NotificationService.instance.scheduleDailyReminder(
-        hour: selectedTime.hour,
-        minute: selectedTime.minute,
-      );
-    }
-
-    if (!mounted) return;
-
-    setState(() => _reminderTime = selectedTime);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Reminder time set to ${selectedTime.format(context)}.',
-        ),
-      ),
-    );
-  } catch (error) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Could not update reminder time: $error')),
-    );
-  }
-}
-
-
-  Future<void> _testNotification() async {
-  try {
-    final granted =
-        await NotificationService.instance.requestPermission();
-
-    if (!mounted) return;
-
-    if (!granted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Notification permission was not granted. '
-            'Check your device settings.',
-          ),
+          content: Text('Test notification sent.'),
         ),
       );
-      return;
+    } catch (error, stackTrace) {
+      debugPrint('Notification test failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Notification test failed: $error'),
+        ),
+      );
     }
-
-    await NotificationService.instance.showTestNotification();
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Test notification sent.'),
-      ),
-    );
-  } catch (error, stackTrace) {
-    debugPrint('Notification test failed: $error');
-    debugPrintStack(stackTrace: stackTrace);
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Notification test failed: $error'),
-      ),
-    );
   }
-}
+
   // --------------------------------------------------
   // BACKUP AND EXPORT
   // --------------------------------------------------
@@ -199,9 +424,11 @@ Future<void> _selectReminderTime() async {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Backup export failed: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Backup export failed: $error'),
+        ),
+      );
     }
   }
 
@@ -221,8 +448,11 @@ Future<void> _selectReminderTime() async {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('CSV export failed: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('CSV export failed: $error'),
+        ),
+      );
     }
   }
 
@@ -251,23 +481,24 @@ Future<void> _selectReminderTime() async {
     if (confirmed != true || !mounted) return;
 
     try {
-      // Your installed file_picker version returns a List<PlatformFile>.
-      final List<PlatformFile> files =
-          await FilePicker.pickFiles(
-            type: FileType.custom,
-            allowedExtensions: ['json'],
-          );
+      final List<PlatformFile> files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
 
       if (files.isEmpty) return;
 
       final selected = files.first;
-
       final String content;
 
       if (selected.path != null) {
-        content = await File(selected.path!).readAsString(encoding: utf8);
+        content = await File(selected.path!).readAsString(
+          encoding: utf8,
+        );
       } else {
-        throw const FormatException('Unable to read the selected backup file.');
+        throw const FormatException(
+          'Unable to read the selected backup file.',
+        );
       }
 
       await BackupService.restoreBackup(content);
@@ -288,8 +519,11 @@ Future<void> _selectReminderTime() async {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Restore failed: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Restore failed: $error'),
+        ),
+      );
     }
   }
 
@@ -323,7 +557,9 @@ Future<void> _selectReminderTime() async {
           autofocus: true,
           textCapitalization: TextCapitalization.words,
           maxLength: 40,
-          decoration: const InputDecoration(hintText: 'Enter your name'),
+          decoration: const InputDecoration(
+            hintText: 'Enter your name',
+          ),
           onSubmitted: (value) {
             if (value.trim().isNotEmpty) {
               Navigator.pop(dialogContext, value.trim());
@@ -332,9 +568,7 @@ Future<void> _selectReminderTime() async {
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-            },
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
@@ -351,13 +585,10 @@ Future<void> _selectReminderTime() async {
 
     controller.dispose();
 
-    if (name == null || name.trim().isEmpty || !mounted) {
-      return;
-    }
+    if (name == null || name.trim().isEmpty || !mounted) return;
 
     try {
       await ProfileStorage.saveName(name);
-
       final savedName = await ProfileStorage.getName();
 
       if (!mounted) return;
@@ -366,17 +597,22 @@ Future<void> _selectReminderTime() async {
         _profileName = savedName;
       });
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Name saved successfully.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Name saved successfully.'),
+        ),
+      );
     } catch (error, stackTrace) {
       debugPrint('Name save failed: $error');
       debugPrintStack(stackTrace: stackTrace);
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Name save error: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Name save error: $error'),
+        ),
+      );
     }
   }
 
@@ -393,10 +629,10 @@ Future<void> _selectReminderTime() async {
         backgroundColor: AppColors.backgroundFor(context),
         elevation: 0,
       ),
-      
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          // PROFILE AND DISPLAY
           _buildSectionTitle(context, 'Profile & display'),
           const SizedBox(height: 12),
 
@@ -428,54 +664,119 @@ Future<void> _selectReminderTime() async {
 
           const SizedBox(height: 24),
 
-_buildSectionTitle(context, 'Notifications'),
-const SizedBox(height: 12),
+          // NOTIFICATIONS: TEST
+          _buildSectionTitle(context, 'Notifications'),
+          const SizedBox(height: 12),
 
-_buildSettingsCard(context, [
-  _buildSettingsTile(
-    context: context,
-    icon: Icons.notifications_active_outlined,
-    title: 'Test Notification',
-    subtitle: 'Check that notifications work on this device',
-    onTap: _testNotification,
-  ),
-]),
-
-
-
-const SizedBox(height: 24),
-
-_buildSectionTitle(context, 'Notifications'),
-const SizedBox(height: 12),
-
-_buildSettingsCard(context, [
-  SwitchListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-    secondary: const Icon(Icons.notifications_active_outlined),
-    title: const Text('Daily expense reminder'),
-    subtitle: Text(
-      _reminderSettingsLoaded
-          ? 'Remind me daily at ${_reminderTime.format(context)}'
-          : 'Loading reminder settings...',
-    ),
-    value: _dailyReminderEnabled,
-    onChanged: _reminderSettingsLoaded
-        ? _toggleDailyReminder
-        : null,
-  ),
-  ListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-    leading: const Icon(Icons.access_time),
-    title: const Text('Reminder time'),
-    subtitle: Text(_reminderTime.format(context)),
-    trailing: const Icon(Icons.chevron_right),
-    enabled: _reminderSettingsLoaded,
-    onTap: _reminderSettingsLoaded ? _selectReminderTime : null,
-  ),
-]),
+          _buildSettingsCard(context, [
+            _buildSettingsTile(
+              context: context,
+              icon: Icons.notifications_active_outlined,
+              title: 'Test Notification',
+              subtitle: 'Check that notifications work on this device',
+              onTap: _testNotification,
+            ),
+          ]),
 
           const SizedBox(height: 24),
 
+          // NOTIFICATIONS: DAILY REMINDER
+          _buildSectionTitle(context, 'Daily reminder'),
+          const SizedBox(height: 12),
+
+          _buildSettingsCard(context, [
+            SwitchListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              secondary: const Icon(Icons.notifications_active_outlined),
+              title: const Text('Daily expense reminder'),
+              subtitle: Text(
+                _reminderSettingsLoaded
+                    ? 'Remind me daily at ${_reminderTime.format(context)}'
+                    : 'Loading reminder settings...',
+              ),
+              value: _dailyReminderEnabled,
+              onChanged: _reminderSettingsLoaded
+                  ? _toggleDailyReminder
+                  : null,
+            ),
+            _buildDivider(context),
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              leading: const Icon(Icons.access_time),
+              title: const Text('Reminder time'),
+              subtitle: Text(_reminderTime.format(context)),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: _reminderSettingsLoaded,
+              onTap: _reminderSettingsLoaded ? _selectReminderTime : null,
+            ),
+          ]),
+
+          const SizedBox(height: 24),
+
+          // SECURITY: APP LOCK AND BIOMETRICS
+          _buildSectionTitle(context, 'Security'),
+          const SizedBox(height: 12),
+
+          FutureBuilder<bool>(
+            future: AppLockService.isEnabled(),
+            builder: (context, snapshot) {
+              final enabled = snapshot.data ?? false;
+              final isLoading =
+                  snapshot.connectionState == ConnectionState.waiting;
+
+              return _buildSettingsCard(context, [
+                SwitchListTile(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16),
+                  secondary: const Icon(Icons.lock_outline),
+                  title: const Text('App Lock'),
+                  subtitle: const Text(
+                    'Protect your financial information with a PIN',
+                  ),
+                  value: enabled,
+                  onChanged: isLoading
+                      ? null
+                      : (value) async {
+                          if (value) {
+                            await _enableAppLock();
+                          } else {
+                            await _disableAppLock();
+                          }
+                        },
+                ),
+                if (enabled) ...[
+                  _buildDivider(context),
+                  FutureBuilder<bool>(
+                    future: AppLockService.isBiometricEnabled(),
+                    builder: (context, biometricSnapshot) {
+                      final biometricEnabled =
+                          biometricSnapshot.data ?? false;
+
+                      return SwitchListTile(
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 16),
+                        secondary: const Icon(Icons.fingerprint),
+                        title: const Text('Fingerprint unlock'),
+                        subtitle: const Text(
+                          'Use your enrolled fingerprint',
+                        ),
+                        value: biometricEnabled,
+                        onChanged:
+                            biometricSnapshot.connectionState ==
+                                    ConnectionState.waiting
+                                ? null
+                                : _toggleBiometric,
+                      );
+                    },
+                  ),
+                ],
+              ]);
+            },
+          ),
+
+          const SizedBox(height: 24),
+
+          // DATA MANAGEMENT
           _buildSectionTitle(context, 'Data Management'),
           const SizedBox(height: 12),
 
@@ -524,6 +825,7 @@ _buildSettingsCard(context, [
 
           const SizedBox(height: 24),
 
+          // ABOUT
           _buildSectionTitle(context, 'About'),
           const SizedBox(height: 12),
 
@@ -578,7 +880,9 @@ _buildSettingsCard(context, [
       decoration: BoxDecoration(
         color: AppColors.surfaceFor(context),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.borderFor(context)),
+        border: Border.all(
+          color: AppColors.borderFor(context),
+        ),
       ),
       child: Column(children: children),
     );
@@ -592,10 +896,14 @@ _buildSettingsCard(context, [
     required VoidCallback onTap,
     Color? iconColor,
   }) {
-    final effectiveIconColor = iconColor ?? AppColors.primaryFor(context);
+    final effectiveIconColor =
+        iconColor ?? AppColors.primaryFor(context);
 
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 6,
+      ),
       leading: Container(
         width: 42,
         height: 42,
@@ -603,9 +911,15 @@ _buildSettingsCard(context, [
           color: effectiveIconColor.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, color: effectiveIconColor),
+        child: Icon(
+          icon,
+          color: effectiveIconColor,
+        ),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+      title: Text(
+        title,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
       subtitle: Text(subtitle),
       trailing: const Icon(Icons.chevron_right_rounded),
       onTap: onTap,
@@ -661,15 +975,11 @@ _buildSettingsCard(context, [
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext, false);
-            },
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext, true);
-            },
+            onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text(
               'Clear Data',
               style: TextStyle(color: Colors.redAccent),
@@ -698,7 +1008,9 @@ _buildSettingsCard(context, [
 
       // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not clear transactions: $error')),
+        SnackBar(
+          content: Text('Could not clear transactions: $error'),
+        ),
       );
     }
   }
@@ -741,7 +1053,10 @@ _buildSettingsCard(context, [
   }
 
   Widget _themeOption(String title, ThemeMode mode) {
-    return RadioListTile<ThemeMode>(title: Text(title), value: mode);
+    return RadioListTile<ThemeMode>(
+      title: Text(title),
+      value: mode,
+    );
   }
 
   // --------------------------------------------------
@@ -774,7 +1089,10 @@ _buildSettingsCard(context, [
                   title: Text('US Dollar (USD)'),
                   value: 'USD',
                 ),
-                RadioListTile<String>(title: Text('Euro (EUR)'), value: 'EUR'),
+                RadioListTile<String>(
+                  title: Text('Euro (EUR)'),
+                  value: 'EUR',
+                ),
                 RadioListTile<String>(
                   title: Text('British Pound (GBP)'),
                   value: 'GBP',
@@ -796,11 +1114,10 @@ _buildSettingsCard(context, [
       if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Currency set to $selectedCurrency.')),
+        SnackBar(
+          content: Text('Currency set to $selectedCurrency.'),
+        ),
       );
     }
   }
-}
-
-extension on PlatformFile {
 }
